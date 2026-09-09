@@ -10,11 +10,9 @@ Important design principle:
 from __future__ import annotations
 
 import re
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 
-# Core disease/context rules. These intentionally carry more weight than any
-# individual lipid-metabolism subfield.
 CORE_RULES: List[Tuple[str, int, Tuple[str, ...]]] = [
     ("diabetic retinopathy", 35, (
         "diabetic retinopathy", "diabetic retinal disease", "diabetic retinopathy-associated",
@@ -30,8 +28,6 @@ CORE_RULES: List[Tuple[str, int, Tuple[str, ...]]] = [
     ("lipotoxicity", 10, ("lipotoxicity", "lipotoxic")),
 ]
 
-# These are deliberately near-equal. The goal is discovery, not to privilege
-# lipid droplets, PLINs, ceramides, LXR, or any other preselected hypothesis.
 LIPID_DIRECTION_RULES: List[Tuple[str, int, Tuple[str, ...]]] = [
     ("fatty acid", 8, (
         "fatty acid", "fatty acid metabolism", "fatty acid oxidation",
@@ -117,12 +113,41 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _item_to_text(item: Any) -> str:
+    """Convert strings or structured API items into searchable text."""
+    if item is None:
+        return ""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        # PubMed/Europe PMC may return MeSH terms and publication types as
+        # dictionaries rather than plain strings. Search all scalar values so
+        # the ranking logic stays source-format agnostic.
+        values = []
+        for value in item.values():
+            if isinstance(value, (str, int, float)):
+                values.append(str(value))
+        return " ".join(values)
+    return str(item)
+
+
+def _list_to_text(value: Any) -> str:
+    if not value:
+        return ""
+    if isinstance(value, (str, dict)):
+        return _item_to_text(value)
+    try:
+        return " ".join(_item_to_text(item) for item in value)
+    except TypeError:
+        return _item_to_text(value)
+
+
 def _field_text(record: Dict) -> str:
     parts = [
         record.get("title", ""),
         record.get("abstract", ""),
-        " ".join(record.get("mesh_terms") or []),
-        " ".join(record.get("publication_types") or []),
+        _list_to_text(record.get("mesh_terms")),
+        _list_to_text(record.get("publication_types")),
     ]
     return _normalise(" ".join(str(x) for x in parts))
 
@@ -157,13 +182,11 @@ def score_record(record: Dict) -> Dict:
             score += points
             matched.append({"label": label, "points": points})
 
-    pub_types = " ".join(record.get("publication_types") or []).lower()
+    pub_types = _list_to_text(record.get("publication_types")).lower()
     if "review" in pub_types or "meta-analysis" in pub_types or "systematic review" in pub_types:
         score += REVIEW_BONUS
         matched.append({"label": "review/meta-analysis", "points": REVIEW_BONUS})
 
-    # Strong safeguard: a paper must directly connect DR/DME with a lipid core
-    # concept to enter the main discovery pool.
     direct_disease = _matches(text, (
         "diabetic retinopathy", "diabetic retinal disease", "diabetic macular edema",
         "diabetic macular oedema", "dme",
