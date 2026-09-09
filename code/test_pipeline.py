@@ -4,6 +4,7 @@ from daily_pipeline import run_pipeline
 
 
 if __name__ == "__main__":
+    print("Starting DR x lipid metabolism smoke test...")
     run_pipeline(
         days=30,
         per_query=10,
