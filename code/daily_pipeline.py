@@ -16,7 +16,7 @@ import re
 from collections import Counter
 from datetime import date
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List
 
 from literature_sources import search_all
 from relevance_ranker import rank_records
@@ -76,11 +76,38 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _item_to_text(item: Any) -> str:
+    """Convert strings or structured API items into searchable text."""
+    if item is None:
+        return ""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        values = []
+        for value in item.values():
+            if isinstance(value, (str, int, float)):
+                values.append(str(value))
+        return " ".join(values)
+    return str(item)
+
+
+def _list_to_text(value: Any) -> str:
+    if not value:
+        return ""
+    if isinstance(value, (str, dict)):
+        return _item_to_text(value)
+    try:
+        return " ".join(_item_to_text(item) for item in value)
+    except TypeError:
+        return _item_to_text(value)
+
+
 def _record_text(record: Dict) -> str:
     fields = [
         record.get("title", ""),
         record.get("abstract", ""),
-        " ".join(record.get("mesh_terms") or []),
+        _list_to_text(record.get("mesh_terms")),
+        _list_to_text(record.get("publication_types")),
     ]
     return _normalise(" ".join(str(x) for x in fields))
 
@@ -106,10 +133,11 @@ def enrich_direction_tags(records: Iterable[Dict]) -> List[Dict]:
 
 def direction_summary(records: Iterable[Dict]) -> List[Dict]:
     """Return direction counts sorted by number of papers, not by priority."""
+    records = list(records)
     counts = Counter()
     for record in records:
         counts.update(record.get("direction_tags") or ["Other lipid-related"])
-    total = len(list(records)) if not isinstance(records, list) else len(records)
+    total = len(records)
     rows = []
     for direction, count in counts.most_common():
         rows.append({
