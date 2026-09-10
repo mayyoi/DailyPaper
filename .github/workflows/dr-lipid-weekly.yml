@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  models: read
 
 jobs:
   weekly-brief:
@@ -27,27 +28,22 @@ jobs:
 
       - name: Check required secrets without exposing values
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          API2D_API_KEY: ${{ secrets.API2D_API_KEY }}
           QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
         run: |
-          if [ -n "$OPENAI_API_KEY" ]; then echo 'OPENAI_API_KEY: configured'; else echo 'OPENAI_API_KEY: not configured'; fi
-          if [ -n "$API2D_API_KEY" ]; then echo 'API2D_API_KEY: configured'; else echo 'API2D_API_KEY: not configured'; fi
           if [ -n "$QQ_SMTP_PASSWORD" ]; then echo 'QQ_SMTP_PASSWORD: configured'; else echo 'QQ_SMTP_PASSWORD: not configured'; fi
           test -n "$QQ_SMTP_PASSWORD" || { echo '::error::QQ_SMTP_PASSWORD is not configured.'; exit 1; }
-          if [ -z "$OPENAI_API_KEY" ] && [ -z "$API2D_API_KEY" ]; then
-            echo '::error::Neither OPENAI_API_KEY nor API2D_API_KEY is configured.'
-            exit 1
-          fi
-          echo 'Required secret presence checks passed.'
+          echo 'QQ SMTP secret presence check passed.'
 
-      - name: Generate weekly bilingual brief
+      - name: Generate weekly bilingual brief with GitHub Models
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          API2D_API_KEY: ${{ secrets.API2D_API_KEY }}
-          AI_MODEL: gpt-4o-mini
-          API2D_MODEL: gpt-3.5-turbo
-        run: python code/weekly_brief.py --days 14 --per-query 100 --top-n 20 --minimum-score 40 --output-dir Output/weekly
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_MODELS_MODEL: openai/gpt-4.1-mini
+          WEEKLY_DAYS: '14'
+          WEEKLY_PER_QUERY: '100'
+          WEEKLY_TOP_N: '20'
+          WEEKLY_MINIMUM_SCORE: '40'
+          WEEKLY_OUTPUT_DIR: Output/weekly
+        run: python code/run_weekly_brief_github_models.py
 
       - name: Send weekly brief to QQ mailbox
         env:
