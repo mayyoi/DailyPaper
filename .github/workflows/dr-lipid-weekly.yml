@@ -26,13 +26,33 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install requests
 
-      - name: Check required secrets without exposing values
+      - name: Resolve QQ SMTP secret without exposing its value
         env:
           QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
+          QQ_EMAIL_PASSWORD: ${{ secrets.QQ_EMAIL_PASSWORD }}
+          QQ_PASSWORD: ${{ secrets.QQ_PASSWORD }}
+          QQ_AUTH_CODE: ${{ secrets.QQ_AUTH_CODE }}
         run: |
-          if [ -n "$QQ_SMTP_PASSWORD" ]; then echo 'QQ_SMTP_PASSWORD: configured'; else echo 'QQ_SMTP_PASSWORD: not configured'; fi
-          test -n "$QQ_SMTP_PASSWORD" || { echo '::error::QQ_SMTP_PASSWORD is not configured.'; exit 1; }
-          echo 'QQ SMTP secret presence check passed.'
+          if [ -n "$QQ_SMTP_PASSWORD" ]; then
+            echo 'QQ mail credential source: QQ_SMTP_PASSWORD'
+            printf '%s' "$QQ_SMTP_PASSWORD" > /tmp/qq_secret
+          elif [ -n "$QQ_EMAIL_PASSWORD" ]; then
+            echo 'QQ mail credential source: QQ_EMAIL_PASSWORD'
+            printf '%s' "$QQ_EMAIL_PASSWORD" > /tmp/qq_secret
+          elif [ -n "$QQ_PASSWORD" ]; then
+            echo 'QQ mail credential source: QQ_PASSWORD'
+            printf '%s' "$QQ_PASSWORD" > /tmp/qq_secret
+          elif [ -n "$QQ_AUTH_CODE" ]; then
+            echo 'QQ mail credential source: QQ_AUTH_CODE'
+            printf '%s' "$QQ_AUTH_CODE" > /tmp/qq_secret
+          else
+            echo '::error::No supported QQ mail secret was found. Expected QQ_SMTP_PASSWORD, QQ_EMAIL_PASSWORD, QQ_PASSWORD, or QQ_AUTH_CODE.'
+            exit 1
+          fi
+          printf 'QQ_SMTP_PASSWORD=' >> "$GITHUB_ENV"
+          cat /tmp/qq_secret >> "$GITHUB_ENV"
+          printf '\n' >> "$GITHUB_ENV"
+          rm -f /tmp/qq_secret
 
       - name: Generate weekly bilingual brief with GitHub Models
         env:
@@ -47,7 +67,7 @@ jobs:
 
       - name: Send weekly brief to QQ mailbox
         env:
-          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
+          QQ_SMTP_PASSWORD: ${{ env.QQ_SMTP_PASSWORD }}
           QQ_SENDER_EMAIL: 171142515@qq.com
           QQ_RECEIVER_EMAIL: 171142515@qq.com
         run: |
