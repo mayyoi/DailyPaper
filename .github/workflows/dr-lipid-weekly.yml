@@ -15,7 +15,7 @@ concurrency:
 jobs:
   weekly-brief:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,12 +38,12 @@ jobs:
           fi
           echo 'QQMAIL secret is available.'
 
-      - name: Generate 20-paper weekly brief
+      - name: Generate dynamic weekly brief
         env:
           WEEKLY_DAYS: '21'
           WEEKLY_PER_QUERY: '80'
-          WEEKLY_TOP_N: '20'
-          WEEKLY_MINIMUM_SCORE: '40'
+          WEEKLY_MINIMUM_SCORE: '55'
+          WEEKLY_HARD_MAX: '60'
           WEEKLY_OUTPUT_DIR: Output/weekly
         run: python code/weekly_brief.py
 
