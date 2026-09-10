@@ -1,67 +1,59 @@
 name: DR lipid weekly brief
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
-concurrency:
-  group: dr-lipid-weekly-brief
-  cancel-in-progress: false
-
 jobs:
-  weekly-brief:
+  weekly-brief-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install requests
-
-      - name: Check QQ mail secret without exposing its value
-        env:
-          QQMAIL: ${{ secrets.QQMAIL }}
-        run: |
-          if [ -z "$QQMAIL" ]; then
-            echo '::error::Repository secret QQMAIL is unavailable to this workflow.'
-            exit 1
-          fi
-          echo 'QQMAIL secret is available.'
-
-      - name: Generate 20-paper weekly brief
+      - name: Generate v2 report without SMTP
         env:
           WEEKLY_DAYS: '21'
-          WEEKLY_PER_QUERY: '80'
-          WEEKLY_TOP_N: '20'
-          WEEKLY_MINIMUM_SCORE: '40'
-          WEEKLY_OUTPUT_DIR: Output/weekly
+          WEEKLY_PER_QUERY: '60'
+          WEEKLY_MINIMUM_SCORE: '55'
+          WEEKLY_HARD_MAX: '30'
+          WEEKLY_OUTPUT_DIR: Output/weekly-v2-test
         run: python code/weekly_brief.py
-
-      - name: Send weekly brief to QQ mailbox
-        env:
-          QQ_SMTP_PASSWORD: ${{ secrets.QQMAIL }}
-          QQ_SENDER_EMAIL: 171142515@qq.com
-          QQ_RECEIVER_EMAIL: 171142515@qq.com
+      - name: Validate required fields
         run: |
-          python code/send_weekly_email.py \
-            --html Output/weekly/$(date +%F).html \
-            --md Output/weekly/$(date +%F).md \
-            --json Output/weekly/$(date +%F).json
-
-      - name: Upload weekly report artifact
+          python - <<'PY'
+          import json, glob
+          p=glob.glob('Output/weekly-v2-test/*.json')[0]
+          d=json.load(open(p,encoding='utf-8'))
+          assert d['included'] > 0
+          assert d['dynamic_count'] is True
+          seen=set()
+          for r in d['papers']:
+              key=(r.get('pmid') or r.get('doi') or '').lower() or r.get('title','').strip().lower()
+              assert key not in seen, f'DUPLICATE: {key}'
+              seen.add(key)
+              assert r.get('journal')
+              m=r.get('journal_metrics') or {}
+              assert m.get('jif') is not None, f"Missing JIF: {r.get('journal')}"
+              assert m.get('jcr_quartile'), f"Missing quartile: {r.get('journal')}"
+              assert r.get('first_author')
+              assert r.get('first_author_affiliations') is not None
+              assert 'annotation' in r and r['annotation'].get('innovation_points')
+              assert r['annotation'].get('article_type')
+          print('VALIDATION OK', d['included'], 'papers')
+          print('HIGHLIGHTS:', open(glob.glob('Output/weekly-v2-test/*.md')[0],encoding='utf-8').read().split('## 1.')[0])
+          PY
+      - name: Upload validation artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dr-lipid-weekly-brief-${{ github.run_number }}
-          path: Output/weekly/
+          name: dr-lipid-v2-validation-${{ github.run_number }}
+          path: Output/weekly-v2-test/
           if-no-files-found: warn
