@@ -1,0 +1,57 @@
+name: DR lipid v2 validation
+
+on:
+  push:
+    branches:
+      - improve-weekly-brief-v2
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install requests
+      - name: Run production generator without SMTP
+        env:
+          WEEKLY_DAYS: '21'
+          WEEKLY_PER_QUERY: '60'
+          WEEKLY_MINIMUM_SCORE: '55'
+          WEEKLY_HARD_MAX: '30'
+          WEEKLY_OUTPUT_DIR: Output/weekly-v2-test
+        run: python code/weekly_brief.py
+      - name: Validate output fields
+        run: |
+          python - <<'PY'
+          import json, glob, sys
+          p=glob.glob('Output/weekly-v2-test/*.json')[0]
+          d=json.load(open(p,encoding='utf-8'))
+          assert d['included'] > 0, 'No papers selected'
+          assert d['dynamic_count'] is True
+          for r in d['papers']:
+              assert r.get('journal'), 'Missing journal'
+              m=r.get('journal_metrics') or {}
+              assert m.get('jif') is not None, f"Missing JIF: {r.get('journal')}"
+              assert m.get('jcr_quartile'), f"Missing JCR quartile: {r.get('journal')}"
+              assert r.get('first_author_affiliations') is not None
+              assert 'annotation' in r and r['annotation'].get('innovation_points')
+          print('VALIDATION OK', d['included'], 'papers')
+          print('FIRST', d['papers'][0]['title'])
+          print('JCR', d['papers'][0]['journal_metrics'])
+          print('FIRST AUTHOR UNIT', d['papers'][0].get('first_author_affiliations'))
+          print('CORR', d['papers'][0].get('corresponding_author'), d['papers'][0].get('corresponding_author_affiliations'))
+          PY
+      - name: Upload validation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-lipid-v2-validation-${{ github.run_number }}
+          path: Output/weekly-v2-test/
+          if-no-files-found: warn
