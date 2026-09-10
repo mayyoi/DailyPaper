@@ -1,0 +1,41 @@
+name: DR lipid literature smoke test
+
+on:
+  push:
+    branches: [dr-lipid-daily]
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install requests
+      - name: Run literature smoke test
+        run: python code/test_pipeline.py
+      - name: Show generated report files
+        run: |
+          ls -lh Output/test-run
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('Output/test-run')
+          files = list(p.glob('*'))
+          print('generated_files=', [str(x) for x in files])
+          data = json.loads((p / next(x.name for x in p.glob('*.json'))).read_text(encoding='utf-8'))
+          print('candidate_count=', data['candidate_count'])
+          print('ranked_count=', data['ranked_count'])
+          print('directions=', data['direction_summary'])
+          PY
+      - name: Upload smoke-test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-lipid-smoke-test-report
+          path: Output/test-run/
+          if-no-files-found: error
