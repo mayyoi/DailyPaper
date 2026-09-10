@@ -150,7 +150,7 @@ def run_weekly_brief(days=14, per_query=100, top_n=20, minimum_score=40, output_
     sources.search_pubmed=fixed_pubmed
     print(f"[retrieve] days={days} per_query={per_query}")
     records=search_all(per_query=per_query,days=days,email=os.getenv('NCBI_EMAIL','171142515@qq.com')); candidates=len(records)
-    records=[enrich_direction_tags(r) for r in records]
+    records=enrich_direction_tags(records)
     ranked=rank_records(records); eligible=[r for r in ranked if int(r.get('relevance_score',0))>=minimum_score]
     if len(eligible)<top_n: eligible=ranked[:top_n]
     selected=eligible[:top_n]
