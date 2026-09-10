@@ -33,3 +33,9 @@ jobs:
           print('ranked_count=', data['ranked_count'])
           print('directions=', data['direction_summary'])
           PY
+      - name: Upload smoke-test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-lipid-smoke-test-report
+          path: Output/test-run/
+          if-no-files-found: error
