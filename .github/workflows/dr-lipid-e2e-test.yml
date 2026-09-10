@@ -1,0 +1,25 @@
+name: DR lipid E2E test
+
+on:
+  push:
+    branches: [dr-lipid-daily]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile code/weekly_brief.py code/send_weekly_email.py code/daily_pipeline.py code/literature_sources.py code/relevance_ranker.py
+      - name: Check QQMAIL secret presence
+        env:
+          QQMAIL: ${{ secrets.QQMAIL }}
+        run: test -n "$QQMAIL"
+      - name: Run source and ranking smoke test
+        run: python code/test_pipeline.py
