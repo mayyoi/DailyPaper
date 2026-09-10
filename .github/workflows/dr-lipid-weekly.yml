@@ -31,6 +31,9 @@ jobs:
           API2D_API_KEY: ${{ secrets.API2D_API_KEY }}
           QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
         run: |
+          if [ -n "$OPENAI_API_KEY" ]; then echo 'OPENAI_API_KEY: configured'; else echo 'OPENAI_API_KEY: not configured'; fi
+          if [ -n "$API2D_API_KEY" ]; then echo 'API2D_API_KEY: configured'; else echo 'API2D_API_KEY: not configured'; fi
+          if [ -n "$QQ_SMTP_PASSWORD" ]; then echo 'QQ_SMTP_PASSWORD: configured'; else echo 'QQ_SMTP_PASSWORD: not configured'; fi
           test -n "$QQ_SMTP_PASSWORD" || { echo '::error::QQ_SMTP_PASSWORD is not configured.'; exit 1; }
           if [ -z "$OPENAI_API_KEY" ] && [ -z "$API2D_API_KEY" ]; then
             echo '::error::Neither OPENAI_API_KEY nor API2D_API_KEY is configured.'
@@ -42,8 +45,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API2D_API_KEY: ${{ secrets.API2D_API_KEY }}
-          AI_MODEL: ${{ vars.AI_MODEL }}
-          API2D_MODEL: ${{ vars.API2D_MODEL }}
+          AI_MODEL: gpt-4o-mini
+          API2D_MODEL: gpt-3.5-turbo
         run: python code/weekly_brief.py --days 14 --per-query 100 --top-n 20 --minimum-score 40 --output-dir Output/weekly
 
       - name: Send weekly brief to QQ mailbox
