@@ -1,13 +1,14 @@
 name: DR lipid weekly brief
 
 on:
+  push:
+    branches: [dr-lipid-daily]
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
 
 permissions:
   contents: read
-  models: read
 
 concurrency:
   group: dr-lipid-weekly-brief
@@ -16,6 +17,7 @@ concurrency:
 jobs:
   weekly-brief:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,48 +30,28 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install requests
 
-      - name: Resolve QQ SMTP secret without exposing its value
+      - name: Check QQ mail secret without exposing its value
         env:
-          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
-          QQ_EMAIL_PASSWORD: ${{ secrets.QQ_EMAIL_PASSWORD }}
-          QQ_PASSWORD: ${{ secrets.QQ_PASSWORD }}
-          QQ_AUTH_CODE: ${{ secrets.QQ_AUTH_CODE }}
+          QQMAIL: ${{ secrets.QQMAIL }}
         run: |
-          if [ -n "$QQ_SMTP_PASSWORD" ]; then
-            echo 'QQ mail credential source: QQ_SMTP_PASSWORD'
-            printf '%s' "$QQ_SMTP_PASSWORD" > /tmp/qq_secret
-          elif [ -n "$QQ_EMAIL_PASSWORD" ]; then
-            echo 'QQ mail credential source: QQ_EMAIL_PASSWORD'
-            printf '%s' "$QQ_EMAIL_PASSWORD" > /tmp/qq_secret
-          elif [ -n "$QQ_PASSWORD" ]; then
-            echo 'QQ mail credential source: QQ_PASSWORD'
-            printf '%s' "$QQ_PASSWORD" > /tmp/qq_secret
-          elif [ -n "$QQ_AUTH_CODE" ]; then
-            echo 'QQ mail credential source: QQ_AUTH_CODE'
-            printf '%s' "$QQ_AUTH_CODE" > /tmp/qq_secret
-          else
-            echo '::error::No supported QQ mail secret was found. Expected QQ_SMTP_PASSWORD, QQ_EMAIL_PASSWORD, QQ_PASSWORD, or QQ_AUTH_CODE.'
+          if [ -z "$QQMAIL" ]; then
+            echo '::error::Repository secret QQMAIL is unavailable to this workflow.'
             exit 1
           fi
-          printf 'QQ_SMTP_PASSWORD=' >> "$GITHUB_ENV"
-          cat /tmp/qq_secret >> "$GITHUB_ENV"
-          printf '\n' >> "$GITHUB_ENV"
-          rm -f /tmp/qq_secret
+          echo 'QQMAIL secret is available.'
 
-      - name: Generate weekly bilingual brief with GitHub Models
+      - name: Generate 20-paper weekly brief
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_MODELS_MODEL: openai/gpt-4.1-mini
-          WEEKLY_DAYS: '14'
-          WEEKLY_PER_QUERY: '100'
+          WEEKLY_DAYS: '21'
+          WEEKLY_PER_QUERY: '80'
           WEEKLY_TOP_N: '20'
           WEEKLY_MINIMUM_SCORE: '40'
           WEEKLY_OUTPUT_DIR: Output/weekly
-        run: python code/run_weekly_brief_github_models.py
+        run: python code/weekly_brief.py
 
       - name: Send weekly brief to QQ mailbox
         env:
-          QQ_SMTP_PASSWORD: ${{ env.QQ_SMTP_PASSWORD }}
+          QQ_SMTP_PASSWORD: ${{ secrets.QQMAIL }}
           QQ_SENDER_EMAIL: 171142515@qq.com
           QQ_RECEIVER_EMAIL: 171142515@qq.com
         run: |
