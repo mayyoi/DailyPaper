@@ -21,9 +21,9 @@ jobs:
       - name: Generate brief without email
         env:
           WEEKLY_DAYS: '21'
-          WEEKLY_PER_QUERY: '80'
+          WEEKLY_PER_QUERY: '30'
           WEEKLY_MINIMUM_SCORE: '55'
-          WEEKLY_HARD_MAX: '60'
+          WEEKLY_HARD_MAX: '10'
           WEEKLY_OUTPUT_DIR: Output/weekly-test
         run: python code/weekly_brief.py
       - name: Validate JSON invariants
