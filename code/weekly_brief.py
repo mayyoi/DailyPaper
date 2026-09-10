@@ -11,29 +11,16 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
-from urllib.parse import quote_plus
 import requests
 from daily_pipeline import enrich_direction_tags
+import literature_sources as sources
 from literature_sources import search_all, google_scholar_url
 from relevance_ranker import rank_records
 
 TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
-GLOSSARY = {
-    "diabetic retinopathy":"糖尿病视网膜病变", "diabetic macular edema":"糖尿病黄斑水肿",
-    "lipid metabolism":"脂质代谢", "lipid homeostasis":"脂质稳态", "lipotoxicity":"脂毒性",
-    "fatty acid":"脂肪酸", "polyunsaturated fatty acid":"多不饱和脂肪酸", "phospholipid":"磷脂",
-    "sphingolipid":"鞘脂", "ceramide":"神经酰胺", "cholesterol":"胆固醇", "oxysterol":"氧固醇",
-    "triglyceride":"甘油三酯", "diacylglycerol":"二酰甘油", "lipoprotein":"脂蛋白",
-    "lipid droplet":"脂滴", "lipid peroxidation":"脂质过氧化", "ferroptosis":"铁死亡",
-    "endothelial cell":"内皮细胞", "müller cell":"Müller细胞", "muller cell":"Müller细胞",
-    "retinal pigment epithelium":"视网膜色素上皮", "retinal ganglion cell":"视网膜神经节细胞",
-    "blood-retinal barrier":"血视网膜屏障", "retinal neurovascular unit":"视网膜神经血管单元",
-    "mitochondrial":"线粒体", "inflammation":"炎症", "oxidative stress":"氧化应激",
-    "diabetes mellitus":"糖尿病", "metabolic stress":"代谢应激", "vascular permeability":"血管通透性",
-}
+GLOSSARY = {"diabetic retinopathy":"糖尿病视网膜病变","diabetic macular edema":"糖尿病黄斑水肿","lipid metabolism":"脂质代谢","lipid homeostasis":"脂质稳态","lipotoxicity":"脂毒性","fatty acid":"脂肪酸","polyunsaturated fatty acid":"多不饱和脂肪酸","phospholipid":"磷脂","sphingolipid":"鞘脂","ceramide":"神经酰胺","cholesterol":"胆固醇","oxysterol":"氧固醇","triglyceride":"甘油三酯","diacylglycerol":"二酰甘油","lipoprotein":"脂蛋白","lipid droplet":"脂滴","lipid peroxidation":"脂质过氧化","ferroptosis":"铁死亡","endothelial cell":"内皮细胞","müller cell":"Müller细胞","muller cell":"Müller细胞","retinal pigment epithelium":"视网膜色素上皮","retinal ganglion cell":"视网膜神经节细胞","blood-retinal barrier":"血视网膜屏障","retinal neurovascular unit":"视网膜神经血管单元","mitochondrial":"线粒体","inflammation":"炎症","oxidative stress":"氧化应激","diabetes mellitus":"糖尿病","metabolic stress":"代谢应激","vascular permeability":"血管通透性"}
 
-def clean(s: Any) -> str:
-    return re.sub(r"\s+", " ", str(s or "")).strip()
+def clean(s: Any) -> str: return re.sub(r"\s+", " ", str(s or "")).strip()
 
 def authors_text(record: Dict) -> str:
     out=[]
@@ -78,8 +65,7 @@ def zh(text: str) -> str:
     t=translate_text(text)
     return t if t and t!=text else fallback_translation(text)
 
-def sentences(text: str) -> List[str]:
-    return [clean(x) for x in re.split(r"(?<=[.!?])\s+",clean(text)) if len(clean(x))>=45]
+def sentences(text: str) -> List[str]: return [clean(x) for x in re.split(r"(?<=[.!?])\s+",clean(text)) if len(clean(x))>=45]
 
 def keywords(record: Dict) -> List[str]:
     text=(record.get("title","")+" "+record.get("abstract","")).lower()
@@ -92,9 +78,7 @@ def keywords(record: Dict) -> List[str]:
 def evidence_level(record: Dict) -> str:
     t=(record.get("title","")+" "+record.get("abstract","")+" "+list_text(record.get("publication_types"))).lower()
     if any(x in t for x in ["meta-analysis","systematic review","review"]): return "review/meta-analysis"
-    human=any(x in t for x in ["patient","patients","clinical","cohort","human","serum","plasma","aqueous humor","retrospective","prospective"])
-    animal=any(x in t for x in ["mouse","mice","rat","rats","db/db","stz","streptozotocin","murine","in vivo"])
-    cell=any(x in t for x in ["cell","cultured","in vitro","hrmec","müller","muller","rpe1","arpe-19"])
+    human=any(x in t for x in ["patient","patients","clinical","cohort","human","serum","plasma","aqueous humor","retrospective","prospective"]); animal=any(x in t for x in ["mouse","mice","rat","rats","db/db","stz","streptozotocin","murine","in vivo"]); cell=any(x in t for x in ["cell","cultured","in vitro","hrmec","müller","muller","rpe1","arpe-19"])
     if sum([human,animal,cell])>=2:return "multi-level"
     if human:return "clinical/human"
     if animal:return "animal"
@@ -102,8 +86,7 @@ def evidence_level(record: Dict) -> str:
     return "unclear"
 
 def innovation_points(record: Dict) -> List[str]:
-    sents=sentences(record.get("abstract", "")); cue=re.compile(r"\b(identify|identified|demonstrate|demonstrated|show|showed|revealed|found|associated|predict|predicted|novel|first|role|mechanism|mechanistic|mediates|regulates|improves|worsens|inhibits|promotes)\b",re.I)
-    picks=[s for s in sents if cue.search(s)] or sents[:3]
+    sents=sentences(record.get("abstract", "")); cue=re.compile(r"\b(identify|identified|demonstrate|demonstrated|show|showed|revealed|found|associated|predict|predicted|novel|first|role|mechanism|mechanistic|mediates|regulates|improves|worsens|inhibits|promotes)\b",re.I); picks=[s for s in sents if cue.search(s)] or sents[:3]
     return ["摘要支持："+x for x in picks[:3]] or ["摘要信息不足，创新性需要结合全文验证。"]
 
 def research_focus(record: Dict) -> List[str]:
@@ -127,8 +110,7 @@ def limitations(record: Dict) -> List[str]:
     return (out or ["创新点和机制判断主要依据摘要，正式立项前建议核对全文实验设计与主要终点。"])[:3]
 
 def annotate(record: Dict) -> Dict:
-    abstract=clean(record.get("abstract")) or "No abstract available."
-    ks=keywords(record)
+    abstract=clean(record.get("abstract")) or "No abstract available."; ks=keywords(record)
     return {"title_zh":zh(record.get("title", "")),"abstract_zh":zh(abstract),"keywords_en":ks,"keywords_zh":[fallback_translation(k) for k in ks],"innovation_points":innovation_points(record),"research_focus":research_focus(record),"evidence_level":evidence_level(record),"limitations_or_cautions":limitations(record)}
 
 def direction_summary(records: Iterable[Dict]) -> List[Dict]:
@@ -137,8 +119,7 @@ def direction_summary(records: Iterable[Dict]) -> List[Dict]:
     n=len(records); return [{"direction":k,"papers":v,"share":round(v/n*100,1) if n else 0} for k,v in c.most_common()]
 
 def render_md(records: List[Dict], candidates: int, days: int) -> str:
-    today=date.today().isoformat(); start=(date.today()-timedelta(days=days-1)).isoformat(); summ=direction_summary(records)
-    L=[f"# DR × Lipid Metabolism Weekly Literature Brief / 糖尿病视网膜病变 × 脂质代谢周报 — {today}","",f"**检索范围:** {start} 至 {today}（{days}天）  ",f"**去重后候选:** {candidates}  ",f"**纳入文献:** {len(records)}  ","**说明:** 不以脂滴为唯一方向；脂肪酸/PUFA、磷脂、鞘脂/神经酰胺、胆固醇/氧固醇、甘油脂、脂蛋白、脂质介质、脂质过氧化/铁死亡、脂滴、LXR/PPAR/SREBP及线粒体脂质代谢均纳入雷达。",""]
+    today=date.today().isoformat(); start=(date.today()-timedelta(days=days-1)).isoformat(); summ=direction_summary(records); L=[f"# DR × Lipid Metabolism Weekly Literature Brief / 糖尿病视网膜病变 × 脂质代谢周报 — {today}","",f"**检索范围:** {start} 至 {today}（{days}天）  ",f"**去重后候选:** {candidates}  ",f"**纳入文献:** {len(records)}  ","**说明:** 不以脂滴为唯一方向；脂肪酸/PUFA、磷脂、鞘脂/神经酰胺、胆固醇/氧固醇、甘油脂、脂蛋白、脂质介质、脂质过氧化/铁死亡、脂滴、LXR/PPAR/SREBP及线粒体脂质代谢均纳入雷达。",""]
     L += ["## 1. Research landscape / 研究方向分布","","|方向|篇数|占比|","|---|---:|---:|"]+[f"|{x['direction']}|{x['papers']}|{x['share']}%|" for x in summ]+["","## 2. Weekly papers / 本周重点文献",""]
     for i,r in enumerate(records,1):
         a=r.get("annotation",{}); L += [f"### {i}. {r.get('title','Untitled')}","",f"**中文题目:** {a.get('title_zh','N/A')}","",f"**作者:** {authors_text(r)}",f"**期刊:** {r.get('journal') or 'N/A'}  ",f"**发表日期:** {r.get('publication_date') or 'N/A'}  ",f"**文章类型:** {list_text(r.get('publication_types')) or 'N/A'}  ",f"**证据层级:** {a.get('evidence_level','N/A')}  ",f"**相关性评分:** {r.get('relevance_score',0)} ({r.get('relevance_tier','')})  ",f"**脂质方向:** {', '.join(r.get('direction_tags') or [])}","","**Abstract / 英文摘要**","",r.get('abstract') or "N/A","","**中文摘要（自动翻译）**","",a.get('abstract_zh','N/A'),"","**Keywords / 关键词**","",f"English: {', '.join(a.get('keywords_en') or [])}",f"中文: {', '.join(a.get('keywords_zh') or [])}","","**Innovation points / 本文创新点（摘要支持）**",""]+[f"- {x}" for x in a.get('innovation_points',[])]+["","**Why it matters / 对你的研究的启发**",""]+[f"- {x}" for x in a.get('research_focus',[])]+["","**Limitations / 注意事项**",""]+[f"- {x}" for x in a.get('limitations_or_cautions',[])]+["",f"**PMID:** {r.get('pmid') or 'N/A'}  ",f"**DOI:** {r.get('doi') or 'N/A'}  ",f"**Link:** {r.get('url') or 'N/A'}","","---",""]
@@ -155,6 +136,20 @@ def render_html(records: List[Dict], candidates: int, days: int) -> str:
     return "".join(P)
 
 def run_weekly_brief(days=14, per_query=100, top_n=20, minimum_score=40, output_dir='Output/weekly'):
+    original_pubmed=sources.search_pubmed
+    def fixed_pubmed(query, retmax=100, days=None, email=None, api_key=None):
+        if days is None or days<=0: return original_pubmed(query,retmax=retmax,days=days,email=email,api_key=api_key)
+        import requests as _requests
+        term=f"({query}) AND (last {days} days[dp])"; params={"db":"pubmed","term":term,"retmode":"json","retmax":retmax,"sort":"pub date"}
+        if email: params["email"]=email
+        if api_key: params["api_key"]=api_key
+        data=sources._request_json(f"{sources.PUBMED_BASE}/esearch.fcgi",params); ids=data.get("esearchresult",{}).get("idlist",[])
+        if not ids:return []
+        fetch={"db":"pubmed","id":",".join(ids),"retmode":"xml"}
+        if email: fetch["email"]=email
+        if api_key: fetch["api_key"]=api_key
+        response=_requests.get(f"{sources.PUBMED_BASE}/efetch.fcgi",params=fetch,timeout=60); response.raise_for_status(); return sources._parse_pubmed_xml(response.text,query)
+    sources.search_pubmed=fixed_pubmed
     print(f"[retrieve] days={days} per_query={per_query}")
     records=search_all(per_query=per_query,days=days,email=os.getenv('NCBI_EMAIL','171142515@qq.com')); candidates=len(records)
     for r in records: enrich_direction_tags(r)
@@ -165,9 +160,7 @@ def run_weekly_brief(days=14, per_query=100, top_n=20, minimum_score=40, output_
     print(f"[rank] candidates={candidates} ranked={len(ranked)} selected={len(selected)}")
     for i,r in enumerate(selected,1): print(f"[annotate] {i}/{len(selected)}"); r['annotation']=annotate(r)
     out=Path(output_dir); out.mkdir(parents=True,exist_ok=True); d=date.today().isoformat(); md=render_md(selected,candidates,days); h=render_html(selected,candidates,days)
-    (out/f"{d}.md").write_text(md,encoding='utf-8'); (out/f"{d}.html").write_text(h,encoding='utf-8')
-    payload={'date':d,'days':days,'candidates':candidates,'included':len(selected),'papers':selected,'google_scholar_url':google_scholar_url('diabetic retinopathy lipid metabolism')}
-    (out/f"{d}.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8'); print(f"[done] {out}/{d}.html")
+    (out/f"{d}.md").write_text(md,encoding='utf-8'); (out/f"{d}.html").write_text(h,encoding='utf-8'); payload={'date':d,'days':days,'candidates':candidates,'included':len(selected),'papers':selected,'google_scholar_url':google_scholar_url('diabetic retinopathy lipid metabolism')}; (out/f"{d}.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8'); print(f"[done] {out}/{d}.html")
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(); p.add_argument('--days',type=int,default=14); p.add_argument('--per-query',type=int,default=100); p.add_argument('--top-n',type=int,default=20); p.add_argument('--minimum-score',type=int,default=40); p.add_argument('--output-dir',default='Output/weekly'); a=p.parse_args(); run_weekly_brief(a.days,a.per_query,a.top_n,a.minimum_score,a.output_dir)
