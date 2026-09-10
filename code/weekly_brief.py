@@ -68,9 +68,7 @@ def zh(text: str) -> str:
 def sentences(text: str) -> List[str]: return [clean(x) for x in re.split(r"(?<=[.!?])\s+",clean(text)) if len(clean(x))>=45]
 
 def keywords(record: Dict) -> List[str]:
-    text=(record.get("title","")+" "+record.get("abstract","")).lower()
-    terms=["lipid metabolism","lipid homeostasis","lipotoxicity","fatty acid","PUFA","phospholipid","sphingolipid","ceramide","cholesterol","oxysterol","triglyceride","diacylglycerol","lipoprotein","lipid mediator","lipid peroxidation","ferroptosis","lipid droplet","perilipin","LXR","PPAR","SREBP","FASN","CPT1","ACSL","CD36","mitochondrial","endothelial","Müller","retinal pigment epithelium","retinal ganglion","blood-retinal barrier","inflammation","oxidative stress"]
-    found=[]
+    text=(record.get("title","")+" "+record.get("abstract","")).lower(); terms=["lipid metabolism","lipid homeostasis","lipotoxicity","fatty acid","PUFA","phospholipid","sphingolipid","ceramide","cholesterol","oxysterol","triglyceride","diacylglycerol","lipoprotein","lipid mediator","lipid peroxidation","ferroptosis","lipid droplet","perilipin","LXR","PPAR","SREBP","FASN","CPT1","ACSL","CD36","mitochondrial","endothelial","Müller","retinal pigment epithelium","retinal ganglion","blood-retinal barrier","inflammation","oxidative stress"]; found=[]
     for t in terms:
         if t.lower() in text and t.lower() not in [x.lower() for x in found]: found.append(t)
     return found[:8] or ["diabetic retinopathy","lipid metabolism"]
@@ -152,7 +150,7 @@ def run_weekly_brief(days=14, per_query=100, top_n=20, minimum_score=40, output_
     sources.search_pubmed=fixed_pubmed
     print(f"[retrieve] days={days} per_query={per_query}")
     records=search_all(per_query=per_query,days=days,email=os.getenv('NCBI_EMAIL','171142515@qq.com')); candidates=len(records)
-    for r in records: enrich_direction_tags(r)
+    records=[enrich_direction_tags(r) for r in records]
     ranked=rank_records(records); eligible=[r for r in ranked if int(r.get('relevance_score',0))>=minimum_score]
     if len(eligible)<top_n: eligible=ranked[:top_n]
     selected=eligible[:top_n]
@@ -163,4 +161,4 @@ def run_weekly_brief(days=14, per_query=100, top_n=20, minimum_score=40, output_
     (out/f"{d}.md").write_text(md,encoding='utf-8'); (out/f"{d}.html").write_text(h,encoding='utf-8'); payload={'date':d,'days':days,'candidates':candidates,'included':len(selected),'papers':selected,'google_scholar_url':google_scholar_url('diabetic retinopathy lipid metabolism')}; (out/f"{d}.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8'); print(f"[done] {out}/{d}.html")
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(); p.add_argument('--days',type=int,default=14); p.add_argument('--per-query',type=int,default=100); p.add_argument('--top-n',type=int,default=20); p.add_argument('--minimum-score',type=int,default=40); p.add_argument('--output-dir',default='Output/weekly'); a=p.parse_args(); run_weekly_brief(a.days,a.per_query,a.top_n,a.minimum_score,a.output_dir)
+    p=argparse.ArgumentParser(); p.add_argument('--days',type=int,default=int(os.getenv('WEEKLY_DAYS','14'))); p.add_argument('--per-query',type=int,default=int(os.getenv('WEEKLY_PER_QUERY','100'))); p.add_argument('--top-n',type=int,default=int(os.getenv('WEEKLY_TOP_N','20'))); p.add_argument('--minimum-score',type=int,default=int(os.getenv('WEEKLY_MINIMUM_SCORE','40'))); p.add_argument('--output-dir',default=os.getenv('WEEKLY_OUTPUT_DIR','Output/weekly')); a=p.parse_args(); run_weekly_brief(a.days,a.per_query,a.top_n,a.minimum_score,a.output_dir)
