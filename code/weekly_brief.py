@@ -1,332 +1,173 @@
-"""Weekly bilingual literature brief for diabetic retinopathy x lipid metabolism.
+"""Weekly DR x lipid-metabolism literature brief without an AI API key.
 
-Retrieval is deliberately broad across lipid-metabolism directions. AI is used only
-for bilingual interpretation and research-focused annotations; it does not decide
-which lipid subfield is scientifically preferable.
+Public biomedical APIs are used for retrieval. Chinese title/abstract translation
+uses a public translation endpoint with retries; innovation and research-focus notes
+are generated from explicit evidence in the title/abstract. No OpenAI, Api2D, or
+GitHub Copilot credential is required.
 """
-
 from __future__ import annotations
-
-import argparse
-import html
-import json
-import os
-import re
-import time
+import argparse, html, json, os, re, time
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
-
+from urllib.parse import quote_plus
 import requests
-
 from daily_pipeline import enrich_direction_tags
-from literature_sources import search_all
+from literature_sources import search_all, google_scholar_url
 from relevance_ranker import rank_records
 
-
-AI_SYSTEM_PROMPT = """You are a biomedical literature analyst helping a PhD researcher build a broad diabetic retinopathy (DR) x lipid metabolism research radar. Do not assume lipid droplets are the preferred direction. The researcher wants to discover promising subfields across fatty acids/PUFAs, phospholipids, sphingolipids/ceramides, cholesterol/oxysterols, glycerolipids, lipoproteins, lipid mediators, lipid peroxidation/ferroptosis, lipid droplets, lipid transcriptional regulation, lipid enzymes/transport, and mitochondrial lipid metabolism.
-
-Return strict JSON only. Base every statement on the supplied title, abstract, metadata and index terms. Never invent experimental results, cohorts, mechanisms, sample sizes, affiliations, or conclusions that are not supported. If the abstract is insufficient to establish an innovation point, explicitly say so and phrase the point as "abstract-supported" or "requires full-text verification".
-
-The researcher is especially interested in retinal neurovascular unit biology, retinal endothelial cells, Müller glia, RPE/RGC biology, blood-retinal barrier, lipid homeostasis, metabolic stress, mitochondrial biology, inflammation/oxidative stress, and translational relevance. These are for interpretation only and must not bias the ranking score.
-
-JSON schema:
-{
-  "title_zh": "Chinese translation of title",
-  "abstract_zh": "faithful Chinese translation of the supplied abstract",
-  "keywords_en": ["5-8 concise keywords"],
-  "keywords_zh": ["corresponding Chinese keywords"],
-  "innovation_points": ["up to 3 concise abstract-supported innovation points"],
-  "research_focus": ["up to 4 concrete reasons/questions relevant to the research radar"],
-  "evidence_level": "clinical/human | animal | cell/in vitro | multi-level | review/meta-analysis | unclear",
-  "limitations_or_cautions": ["up to 3 important cautions or gaps visible from metadata/abstract"]
+TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+GLOSSARY = {
+    "diabetic retinopathy":"糖尿病视网膜病变", "diabetic macular edema":"糖尿病黄斑水肿",
+    "lipid metabolism":"脂质代谢", "lipid homeostasis":"脂质稳态", "lipotoxicity":"脂毒性",
+    "fatty acid":"脂肪酸", "polyunsaturated fatty acid":"多不饱和脂肪酸", "phospholipid":"磷脂",
+    "sphingolipid":"鞘脂", "ceramide":"神经酰胺", "cholesterol":"胆固醇", "oxysterol":"氧固醇",
+    "triglyceride":"甘油三酯", "diacylglycerol":"二酰甘油", "lipoprotein":"脂蛋白",
+    "lipid droplet":"脂滴", "lipid peroxidation":"脂质过氧化", "ferroptosis":"铁死亡",
+    "endothelial cell":"内皮细胞", "müller cell":"Müller细胞", "muller cell":"Müller细胞",
+    "retinal pigment epithelium":"视网膜色素上皮", "retinal ganglion cell":"视网膜神经节细胞",
+    "blood-retinal barrier":"血视网膜屏障", "retinal neurovascular unit":"视网膜神经血管单元",
+    "mitochondrial":"线粒体", "inflammation":"炎症", "oxidative stress":"氧化应激",
+    "diabetes mellitus":"糖尿病", "metabolic stress":"代谢应激", "vascular permeability":"血管通透性",
 }
-"""
 
+def clean(s: Any) -> str:
+    return re.sub(r"\s+", " ", str(s or "")).strip()
 
-def _item_to_text(item: Any) -> str:
-    if item is None:
-        return ""
-    if isinstance(item, str):
-        return item
-    if isinstance(item, dict):
-        vals = []
-        for v in item.values():
-            if isinstance(v, (str, int, float)):
-                vals.append(str(v))
-        return " ".join(vals)
-    return str(item)
+def authors_text(record: Dict) -> str:
+    out=[]
+    for a in record.get("authors") or []:
+        if isinstance(a, dict): out.append(clean(a.get("name") or a.get("full_name") or a.get("author_name")))
+        else: out.append(clean(a))
+    return ", ".join(x for x in out if x) or "N/A"
 
+def list_text(v: Any) -> str:
+    if not v: return ""
+    if isinstance(v, (str, dict)): return clean(v)
+    return "; ".join(clean(x) for x in v if clean(x))
 
-def _list_to_text(value: Any) -> str:
-    if not value:
-        return ""
-    if isinstance(value, (str, dict)):
-        return _item_to_text(value)
-    try:
-        return "; ".join(_item_to_text(x) for x in value)
-    except TypeError:
-        return _item_to_text(value)
+def translate_text(text: str, target: str="zh-CN", retries: int=3) -> str:
+    text=clean(text)
+    if not text: return ""
+    chunks=[]; cur=""
+    for sentence in re.split(r"(?<=[.!?;])\s+", text):
+        if len(cur)+len(sentence)+1>2200 and cur: chunks.append(cur); cur=sentence
+        else: cur=(cur+" "+sentence).strip()
+    if cur: chunks.append(cur)
+    translated=[]
+    for chunk in chunks:
+        ok=False
+        for attempt in range(retries):
+            try:
+                r=requests.get(TRANSLATE_URL,params={"client":"gtx","sl":"en","tl":target,"dt":"t","q":chunk},timeout=30,headers={"User-Agent":"Mozilla/5.0"})
+                r.raise_for_status(); data=r.json(); value="".join(part[0] for part in (data[0] or []) if part and part[0])
+                if value: translated.append(value); ok=True; break
+            except Exception:
+                if attempt<retries-1: time.sleep(1.5*(attempt+1))
+        if not ok: translated.append(chunk)
+        time.sleep(0.15)
+    return " ".join(translated)
 
+def fallback_translation(text: str) -> str:
+    x=clean(text)
+    for en,zhv in sorted(GLOSSARY.items(),key=lambda kv:-len(kv[0])): x=re.sub(re.escape(en),zhv,x,flags=re.I)
+    return x
 
-def _authors_text(record: Dict) -> str:
-    authors = record.get("authors") or []
-    names = []
-    for author in authors:
-        if isinstance(author, dict):
-            name = author.get("name") or author.get("full_name") or author.get("author_name")
-            if name:
-                names.append(str(name))
-        elif author:
-            names.append(str(author))
-    return ", ".join(names) if names else "N/A"
+def zh(text: str) -> str:
+    t=translate_text(text)
+    return t if t and t!=text else fallback_translation(text)
 
+def sentences(text: str) -> List[str]:
+    return [clean(x) for x in re.split(r"(?<=[.!?])\s+",clean(text)) if len(clean(x))>=45]
 
-def _api_settings() -> Dict[str, str]:
-    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-    api2d_key = os.getenv("API2D_API_KEY", "").strip()
-    model = os.getenv("AI_MODEL", "gpt-4o-mini").strip()
-    if openai_key:
-        return {"key": openai_key, "url": "https://api.openai.com/v1/chat/completions", "model": model}
-    if api2d_key:
-        return {"key": api2d_key, "url": "https://openai.api2d.net/v1/chat/completions", "model": os.getenv("API2D_MODEL", "gpt-3.5-turbo")}
-    raise RuntimeError("No AI API key configured. Add OPENAI_API_KEY or API2D_API_KEY as a GitHub Actions secret.")
+def keywords(record: Dict) -> List[str]:
+    text=(record.get("title","")+" "+record.get("abstract","")).lower()
+    terms=["lipid metabolism","lipid homeostasis","lipotoxicity","fatty acid","PUFA","phospholipid","sphingolipid","ceramide","cholesterol","oxysterol","triglyceride","diacylglycerol","lipoprotein","lipid mediator","lipid peroxidation","ferroptosis","lipid droplet","perilipin","LXR","PPAR","SREBP","FASN","CPT1","ACSL","CD36","mitochondrial","endothelial","Müller","retinal pigment epithelium","retinal ganglion","blood-retinal barrier","inflammation","oxidative stress"]
+    found=[]
+    for t in terms:
+        if t.lower() in text and t.lower() not in [x.lower() for x in found]: found.append(t)
+    return found[:8] or ["diabetic retinopathy","lipid metabolism"]
 
+def evidence_level(record: Dict) -> str:
+    t=(record.get("title","")+" "+record.get("abstract","")+" "+list_text(record.get("publication_types"))).lower()
+    if any(x in t for x in ["meta-analysis","systematic review","review"]): return "review/meta-analysis"
+    human=any(x in t for x in ["patient","patients","clinical","cohort","human","serum","plasma","aqueous humor","retrospective","prospective"])
+    animal=any(x in t for x in ["mouse","mice","rat","rats","db/db","stz","streptozotocin","murine","in vivo"])
+    cell=any(x in t for x in ["cell","cultured","in vitro","hrmec","müller","muller","rpe1","arpe-19"])
+    if sum([human,animal,cell])>=2:return "multi-level"
+    if human:return "clinical/human"
+    if animal:return "animal"
+    if cell:return "cell/in vitro"
+    return "unclear"
 
-def _call_ai(record: Dict, settings: Dict[str, str], retries: int = 3) -> Dict:
-    abstract = record.get("abstract", "") or ""
-    if not abstract.strip():
-        abstract = "No abstract available."
-    payload_record = {
-        "title": record.get("title", ""),
-        "authors": _authors_text(record),
-        "journal": record.get("journal", ""),
-        "publication_date": record.get("publication_date", ""),
-        "publication_types": _list_to_text(record.get("publication_types")),
-        "mesh_terms": _list_to_text(record.get("mesh_terms")),
-        "abstract": abstract,
-        "directions": record.get("direction_tags") or record.get("lipid_directions") or [],
-        "relevance_score": record.get("relevance_score", 0),
-    }
-    messages = [
-        {"role": "system", "content": AI_SYSTEM_PROMPT},
-        {"role": "user", "content": json.dumps(payload_record, ensure_ascii=False)},
-    ]
-    body = {"model": settings["model"], "messages": messages, "temperature": 0.1}
-    last_error = None
-    for attempt in range(retries):
-        try:
-            response = requests.post(
-                settings["url"],
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {settings['key']}"},
-                json=body,
-                timeout=90,
-            )
-            response.raise_for_status()
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip(), flags=re.I)
-            return json.loads(content)
-        except Exception as exc:
-            last_error = exc
-            if attempt < retries - 1:
-                time.sleep(2 ** attempt)
-    raise RuntimeError(f"AI enrichment failed after {retries} attempts: {last_error}")
+def innovation_points(record: Dict) -> List[str]:
+    sents=sentences(record.get("abstract", "")); cue=re.compile(r"\b(identify|identified|demonstrate|demonstrated|show|showed|revealed|found|associated|predict|predicted|novel|first|role|mechanism|mechanistic|mediates|regulates|improves|worsens|inhibits|promotes)\b",re.I)
+    picks=[s for s in sents if cue.search(s)] or sents[:3]
+    return ["摘要支持："+x for x in picks[:3]] or ["摘要信息不足，创新性需要结合全文验证。"]
 
+def research_focus(record: Dict) -> List[str]:
+    tags=record.get("direction_tags") or []; t=(record.get("title","")+" "+record.get("abstract","")).lower(); out=[]
+    if any("sphingolipid" in x.lower() or "ceramide" in x.lower() for x in tags): out.append("关注神经酰胺/鞘脂是否连接内皮屏障、炎症与细胞死亡，可作为可验证的脂毒性机制轴。")
+    if any("fatty acid" in x.lower() or "PUFA" in x for x in tags): out.append("关注脂肪酸谱、脂肪酸氧化与炎症脂质介质之间的耦联，区分底物效应与信号效应。")
+    if any("lipid droplet" in x.lower() for x in tags): out.append("关注脂滴形成、脂滴-线粒体接触及脂肪酸动员，而不是只看脂滴数量。")
+    if any("cholesterol" in x.lower() for x in tags): out.append("关注胆固醇/氧固醇稳态及LXR-PPAR-SREBP等转录调控是否影响视网膜血管和胶质细胞。")
+    if any("ferroptosis" in x.lower() or "peroxidation" in x.lower() for x in tags): out.append("关注脂质过氧化-铁死亡与线粒体应激的因果关系，并考虑用脂质组学或特异性干预验证。")
+    if "endothelial" in t or "blood-retinal barrier" in t: out.append("与RNVU/BRB高度相关：可进一步比较内皮细胞与Müller细胞的脂质代谢响应是否存在细胞类型特异性。")
+    if "müller" in t or "muller" in t: out.append("Müller胶质值得重点观察脂质处理、乳酸/脂肪酸代谢与Kir4.1/炎症表型之间的联系。")
+    if "retinal pigment" in t or "rpe" in t: out.append("RPE方向可关注脂质处理与线粒体功能、氧化应激及视网膜外屏障之间的耦联。")
+    if "patient" in t or "cohort" in t or "clinical" in t: out.append("若有临床队列，优先评估指标与DR分级/OCTA表型的关联，并进一步寻找可进入前瞻性验证的指标。")
+    return out[:4] or ["可将本文机制映射到DR-RNVU：脂质来源、代谢去路、细胞器处理和炎症/屏障表型四个层面逐一验证。"]
 
-def enrich_with_ai(records: List[Dict]) -> List[Dict]:
-    settings = _api_settings()
-    output = []
-    for idx, record in enumerate(records, 1):
-        print(f"[ai] enriching {idx}/{len(records)}: {record.get('title', '')[:100]}")
-        enriched = dict(record)
-        try:
-            annotation = _call_ai(record, settings)
-            enriched["ai_annotation"] = annotation
-        except Exception as exc:
-            print(f"[ai] ERROR: {exc}")
-            raise
-        output.append(enriched)
-    return output
+def limitations(record: Dict) -> List[str]:
+    out=[]; t=(record.get("title","")+" "+record.get("abstract","")).lower()
+    if not record.get("abstract"): out.append("当前来源没有摘要，机制判断必须回到全文。")
+    if "association" in t or "associated" in t or "correlation" in t: out.append("摘要包含相关性证据时，不应直接等同于因果关系。")
+    if evidence_level(record) in ("cell/in vitro","animal"): out.append("单一模型的外推性有限，需关注与人类DR表型的一致性。")
+    return (out or ["创新点和机制判断主要依据摘要，正式立项前建议核对全文实验设计与主要终点。"])[:3]
 
+def annotate(record: Dict) -> Dict:
+    abstract=clean(record.get("abstract")) or "No abstract available."
+    ks=keywords(record)
+    return {"title_zh":zh(record.get("title", "")),"abstract_zh":zh(abstract),"keywords_en":ks,"keywords_zh":[fallback_translation(k) for k in ks],"innovation_points":innovation_points(record),"research_focus":research_focus(record),"evidence_level":evidence_level(record),"limitations_or_cautions":limitations(record)}
 
-def _direction_summary(records: Iterable[Dict]) -> List[Dict]:
-    counts = Counter()
-    records = list(records)
-    for record in records:
-        counts.update(record.get("direction_tags") or ["Other lipid-related"])
-    total = len(records)
-    return [
-        {"direction": k, "papers": v, "share": round(v / total * 100, 1) if total else 0.0}
-        for k, v in counts.most_common()
-    ]
+def direction_summary(records: Iterable[Dict]) -> List[Dict]:
+    c=Counter(); records=list(records)
+    for r in records:c.update(r.get("direction_tags") or ["Other lipid-related"])
+    n=len(records); return [{"direction":k,"papers":v,"share":round(v/n*100,1) if n else 0} for k,v in c.most_common()]
 
-
-def _md_list(items: Any) -> str:
-    if not items:
-        return "- N/A"
-    return "\n".join(f"- {str(x)}" for x in items)
-
-
-def render_markdown(records: List[Dict], candidates: int, days: int, top_n: int) -> str:
-    today = date.today().isoformat()
-    start = (date.today() - timedelta(days=days - 1)).isoformat()
-    summary = _direction_summary(records)
-    lines = [
-        f"# DR × Lipid Metabolism Weekly Literature Brief / 糖尿病视网膜病变 × 脂质代谢周报 — {today}",
-        "",
-        f"**Coverage / 检索范围:** {start} to {today} ({days} days)  ",
-        f"**Unique candidates / 去重后候选:** {candidates}  ",
-        f"**Papers included / 纳入文献:** {len(records)}  ",
-        f"**Ranking / 排序:** transparent DR × lipid-metabolism relevance score; lipid sub-directions are descriptive, not preferential.",
-        "",
-        "## 1. Research landscape / 研究方向分布",
-        "",
-        "| Direction / 方向 | Papers / 篇数 | Share / 占比 |",
-        "|---|---:|---:|",
-    ]
-    for row in summary:
-        lines.append(f"| {row['direction']} | {row['papers']} | {row['share']}% |")
-
-    lines += ["", "## 2. Weekly papers / 本周重点文献", ""]
-    for i, record in enumerate(records, 1):
-        ai = record.get("ai_annotation") or {}
-        lines += [
-            f"### {i}. {record.get('title', 'Untitled')}",
-            "",
-            f"**中文题目 / Chinese title:** {ai.get('title_zh', 'N/A')}",
-            "",
-            f"**Authors / 作者:** {_authors_text(record)}",
-            "",
-            f"**Journal / 期刊:** {record.get('journal') or 'N/A'}  ",
-            f"**Publication date / 发表日期:** {record.get('publication_date') or 'N/A'}  ",
-            f"**Article type / 文章类型:** {_list_to_text(record.get('publication_types')) or 'N/A'}  ",
-            f"**Evidence level / 证据层级:** {ai.get('evidence_level', 'N/A')}  ",
-            f"**Relevance score / 相关性评分:** {record.get('relevance_score', 0)} ({record.get('relevance_tier', '')})  ",
-            f"**Directions / 脂质方向:** {', '.join(record.get('direction_tags') or [])}",
-            "",
-            "**Abstract / 英文摘要**",
-            "",
-            record.get('abstract') or "N/A",
-            "",
-            "**摘要 / 中文摘要**",
-            "",
-            ai.get('abstract_zh', 'N/A'),
-            "",
-            "**Keywords / 关键词**",
-            "",
-            f"English: {', '.join(ai.get('keywords_en') or []) or 'N/A'}  ",
-            f"中文: {', '.join(ai.get('keywords_zh') or []) or 'N/A'}",
-            "",
-            "**Innovation points / 本文创新点（基于摘要）**",
-            "",
-            _md_list(ai.get('innovation_points')),
-            "",
-            "**Why it matters for your research / 对你的研究有什么值得关注的地方**",
-            "",
-            _md_list(ai.get('research_focus')),
-            "",
-            "**Limitations / 注意事项**",
-            "",
-            _md_list(ai.get('limitations_or_cautions')),
-            "",
-            f"**PMID:** {record.get('pmid') or 'N/A'}  ",
-            f"**DOI:** {record.get('doi') or 'N/A'}  ",
-            f"**Link / 链接:** {record.get('url') or 'N/A'}",
-            "",
-            "---",
-            "",
-        ]
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def _html_list(items: Any) -> str:
-    if not items:
-        return "<p>N/A</p>"
-    return "<ul>" + "".join(f"<li>{html.escape(str(x))}</li>" for x in items) + "</ul>"
-
+def render_md(records: List[Dict], candidates: int, days: int) -> str:
+    today=date.today().isoformat(); start=(date.today()-timedelta(days=days-1)).isoformat(); summ=direction_summary(records)
+    L=[f"# DR × Lipid Metabolism Weekly Literature Brief / 糖尿病视网膜病变 × 脂质代谢周报 — {today}","",f"**检索范围:** {start} 至 {today}（{days}天）  ",f"**去重后候选:** {candidates}  ",f"**纳入文献:** {len(records)}  ","**说明:** 不以脂滴为唯一方向；脂肪酸/PUFA、磷脂、鞘脂/神经酰胺、胆固醇/氧固醇、甘油脂、脂蛋白、脂质介质、脂质过氧化/铁死亡、脂滴、LXR/PPAR/SREBP及线粒体脂质代谢均纳入雷达。",""]
+    L += ["## 1. Research landscape / 研究方向分布","","|方向|篇数|占比|","|---|---:|---:|"]+[f"|{x['direction']}|{x['papers']}|{x['share']}%|" for x in summ]+["","## 2. Weekly papers / 本周重点文献",""]
+    for i,r in enumerate(records,1):
+        a=r.get("annotation",{}); L += [f"### {i}. {r.get('title','Untitled')}","",f"**中文题目:** {a.get('title_zh','N/A')}","",f"**作者:** {authors_text(r)}",f"**期刊:** {r.get('journal') or 'N/A'}  ",f"**发表日期:** {r.get('publication_date') or 'N/A'}  ",f"**文章类型:** {list_text(r.get('publication_types')) or 'N/A'}  ",f"**证据层级:** {a.get('evidence_level','N/A')}  ",f"**相关性评分:** {r.get('relevance_score',0)} ({r.get('relevance_tier','')})  ",f"**脂质方向:** {', '.join(r.get('direction_tags') or [])}","","**Abstract / 英文摘要**","",r.get('abstract') or "N/A","","**中文摘要（自动翻译）**","",a.get('abstract_zh','N/A'),"","**Keywords / 关键词**","",f"English: {', '.join(a.get('keywords_en') or [])}",f"中文: {', '.join(a.get('keywords_zh') or [])}","","**Innovation points / 本文创新点（摘要支持）**",""]+[f"- {x}" for x in a.get('innovation_points',[])]+["","**Why it matters / 对你的研究的启发**",""]+[f"- {x}" for x in a.get('research_focus',[])]+["","**Limitations / 注意事项**",""]+[f"- {x}" for x in a.get('limitations_or_cautions',[])]+["",f"**PMID:** {r.get('pmid') or 'N/A'}  ",f"**DOI:** {r.get('doi') or 'N/A'}  ",f"**Link:** {r.get('url') or 'N/A'}","","---",""]
+    L += ["## 3. Google Scholar supplement / Google Scholar补充检索","","系统不自动抓取Google Scholar；以下链接用于人工交叉核查。",google_scholar_url('diabetic retinopathy lipid metabolism'),""]
+    return "\n".join(L).rstrip()+"\n"
 
 def render_html(records: List[Dict], candidates: int, days: int) -> str:
-    today = date.today().isoformat()
-    summary = _direction_summary(records)
-    parts = [
-        f"<html><body><h1>DR × Lipid Metabolism Weekly Literature Brief / 糖尿病视网膜病变 × 脂质代谢周报 — {today}</h1>",
-        f"<p>Coverage / 检索范围: last {days} days; unique candidates / 候选 {candidates}; included / 纳入 {len(records)}.</p>",
-        "<h2>Research landscape / 研究方向分布</h2><table border='1' cellpadding='6'><tr><th>Direction / 方向</th><th>Papers / 篇数</th><th>Share / 占比</th></tr>",
-    ]
-    for row in summary:
-        parts.append(f"<tr><td>{html.escape(row['direction'])}</td><td>{row['papers']}</td><td>{row['share']}%</td></tr>")
-    parts.append("</table><h2>Weekly papers / 本周重点文献</h2>")
-    for i, record in enumerate(records, 1):
-        ai = record.get('ai_annotation') or {}
-        title = html.escape(record.get('title', 'Untitled'))
-        url = html.escape(record.get('url') or '')
-        parts += [
-            f"<h3>{i}. <a href='{url}'>{title}</a></h3>",
-            f"<p><b>中文题目:</b> {html.escape(ai.get('title_zh', 'N/A'))}</p>",
-            f"<p><b>Authors / 作者:</b> {html.escape(_authors_text(record))}</p>",
-            f"<p><b>Journal / 期刊:</b> {html.escape(record.get('journal') or 'N/A')} | <b>Date / 日期:</b> {html.escape(record.get('publication_date') or 'N/A')} | <b>Score / 评分:</b> {record.get('relevance_score', 0)}</p>",
-            f"<p><b>Directions / 方向:</b> {html.escape(', '.join(record.get('direction_tags') or []))}</p>",
-            "<p><b>Abstract / 英文摘要</b></p>",
-            f"<p>{html.escape(record.get('abstract') or 'N/A').replace(chr(10), '<br>')}</p>",
-            "<p><b>摘要 / 中文摘要</b></p>",
-            f"<p>{html.escape(ai.get('abstract_zh', 'N/A')).replace(chr(10), '<br>')}</p>",
-            f"<p><b>Keywords / 关键词:</b> {html.escape(', '.join(ai.get('keywords_en') or []))}<br>{html.escape(', '.join(ai.get('keywords_zh') or []))}</p>",
-            "<p><b>Innovation points / 本文创新点</b></p>", _html_list(ai.get('innovation_points')),
-            "<p><b>Research focus / 值得你重点关注</b></p>", _html_list(ai.get('research_focus')),
-            "<p><b>Limitations / 注意事项</b></p>", _html_list(ai.get('limitations_or_cautions')),
-            f"<p><b>PMID:</b> {html.escape(record.get('pmid') or 'N/A')} | <b>DOI:</b> {html.escape(record.get('doi') or 'N/A')}<br><a href='{url}'>Open article / 打开文章</a></p><hr>",
-        ]
-    parts.append("</body></html>")
-    return "".join(parts)
+    today=date.today().isoformat(); summ=direction_summary(records); P=[f"<html><body><h1>DR × Lipid Metabolism Weekly Literature Brief / 糖尿病视网膜病变 × 脂质代谢周报 — {today}</h1>",f"<p>Coverage: last {days} days; candidates: {candidates}; included: {len(records)}.</p>","<h2>Research landscape / 研究方向分布</h2><table border='1' cellpadding='6'><tr><th>Direction</th><th>Papers</th><th>Share</th></tr>"]
+    for x in summ:P.append(f"<tr><td>{html.escape(x['direction'])}</td><td>{x['papers']}</td><td>{x['share']}%</td></tr>")
+    P.append("</table><h2>Weekly papers / 本周重点文献</h2>")
+    for i,r in enumerate(records,1):
+        a=r.get('annotation',{}); url=html.escape(r.get('url') or '#'); P += [f"<h3>{i}. <a href='{url}'>{html.escape(r.get('title','Untitled'))}</a></h3>",f"<p><b>中文题目:</b> {html.escape(a.get('title_zh','N/A'))}</p>",f"<p><b>作者:</b> {html.escape(authors_text(r))}<br><b>期刊:</b> {html.escape(r.get('journal') or 'N/A')}<br><b>日期:</b> {html.escape(r.get('publication_date') or 'N/A')}<br><b>证据层级:</b> {html.escape(a.get('evidence_level','N/A'))}<br><b>评分:</b> {r.get('relevance_score',0)}<br><b>方向:</b> {html.escape(', '.join(r.get('direction_tags') or []))}</p>","<p><b>Abstract / 英文摘要</b></p>",f"<p>{html.escape(r.get('abstract') or 'N/A').replace(chr(10),'<br>')}</p>","<p><b>中文摘要（自动翻译）</b></p>",f"<p>{html.escape(a.get('abstract_zh','N/A')).replace(chr(10),'<br>')}</p>",f"<p><b>Keywords:</b> {html.escape(', '.join(a.get('keywords_en') or []))}<br><b>关键词:</b> {html.escape(', '.join(a.get('keywords_zh') or []))}</p>","<p><b>Innovation points / 本文创新点</b></p>","<ul>"+"".join(f"<li>{html.escape(x)}</li>" for x in a.get('innovation_points',[]))+"</ul>","<p><b>Why it matters / 对你的研究的启发</b></p>","<ul>"+"".join(f"<li>{html.escape(x)}</li>" for x in a.get('research_focus',[]))+"</ul>","<p><b>Limitations / 注意事项</b></p>","<ul>"+"".join(f"<li>{html.escape(x)}</li>" for x in a.get('limitations_or_cautions',[]))+"</ul>",f"<p>PMID: {html.escape(r.get('pmid') or 'N/A')} | DOI: {html.escape(r.get('doi') or 'N/A')}<br><a href='{url}'>Open article / 打开文章</a></p><hr>"]
+    P += [f"<h2>Google Scholar supplement / Google Scholar补充检索</h2><p>系统不自动抓取Google Scholar；用于人工交叉核查。</p><p><a href='{html.escape(google_scholar_url('diabetic retinopathy lipid metabolism'))}'>Google Scholar search</a></p>","</body></html>"]
+    return "".join(P)
 
+def run_weekly_brief(days=14, per_query=100, top_n=20, minimum_score=40, output_dir='Output/weekly'):
+    print(f"[retrieve] days={days} per_query={per_query}")
+    records=search_all(per_query=per_query,days=days,email=os.getenv('NCBI_EMAIL','171142515@qq.com')); candidates=len(records)
+    for r in records: enrich_direction_tags(r)
+    ranked=rank_records(records); eligible=[r for r in ranked if int(r.get('relevance_score',0))>=minimum_score]
+    if len(eligible)<top_n: eligible=ranked[:top_n]
+    selected=eligible[:top_n]
+    if len(selected)<top_n: raise RuntimeError(f"Only {len(selected)} relevant papers found; need {top_n}.")
+    print(f"[rank] candidates={candidates} ranked={len(ranked)} selected={len(selected)}")
+    for i,r in enumerate(selected,1): print(f"[annotate] {i}/{len(selected)}"); r['annotation']=annotate(r)
+    out=Path(output_dir); out.mkdir(parents=True,exist_ok=True); d=date.today().isoformat(); md=render_md(selected,candidates,days); h=render_html(selected,candidates,days)
+    (out/f"{d}.md").write_text(md,encoding='utf-8'); (out/f"{d}.html").write_text(h,encoding='utf-8')
+    payload={'date':d,'days':days,'candidates':candidates,'included':len(selected),'papers':selected,'google_scholar_url':google_scholar_url('diabetic retinopathy lipid metabolism')}
+    (out/f"{d}.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8'); print(f"[done] {out}/{d}.html")
 
-def run_weekly_brief(days: int = 14, per_query: int = 100, top_n: int = 20, minimum_score: int = 40, output_dir: str = "Output/weekly") -> Dict:
-    records = search_all(per_query=per_query, days=days)
-    candidates = len(records)
-    ranked = rank_records(records, top_n=top_n, minimum_score=minimum_score)
-    ranked = enrich_direction_tags(ranked)
-    if not ranked:
-        raise RuntimeError("No records passed the relevance threshold; refusing to send an empty weekly brief.")
-    ranked = enrich_with_ai(ranked)
-
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    today = date.today().isoformat()
-    md_path = out / f"{today}.md"
-    html_path = out / f"{today}.html"
-    json_path = out / f"{today}.json"
-
-    md_path.write_text(render_markdown(ranked, candidates, days, top_n), encoding="utf-8")
-    html_path.write_text(render_html(ranked, candidates, days), encoding="utf-8")
-    payload = {
-        "date": today,
-        "coverage_days": days,
-        "candidate_count": candidates,
-        "included_count": len(ranked),
-        "direction_summary": _direction_summary(ranked),
-        "records": ranked,
-    }
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    print(f"[weekly] candidates={candidates}; included={len(ranked)}")
-    print(f"[weekly] markdown={md_path}")
-    print(f"[weekly] html={html_path}")
-    print(f"[weekly] json={json_path}")
-    return payload
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="DR x lipid metabolism weekly bilingual literature brief")
-    parser.add_argument("--days", type=int, default=14)
-    parser.add_argument("--per-query", type=int, default=100)
-    parser.add_argument("--top-n", type=int, default=20)
-    parser.add_argument("--minimum-score", type=int, default=40)
-    parser.add_argument("--output-dir", default="Output/weekly")
-    args = parser.parse_args()
-    run_weekly_brief(args.days, args.per_query, args.top_n, args.minimum_score, args.output_dir)
-
-
-if __name__ == "__main__":
-    main()
+if __name__=='__main__':
+    p=argparse.ArgumentParser(); p.add_argument('--days',type=int,default=14); p.add_argument('--per-query',type=int,default=100); p.add_argument('--top-n',type=int,default=20); p.add_argument('--minimum-score',type=int,default=40); p.add_argument('--output-dir',default='Output/weekly'); a=p.parse_args(); run_weekly_brief(a.days,a.per_query,a.top_n,a.minimum_score,a.output_dir)
