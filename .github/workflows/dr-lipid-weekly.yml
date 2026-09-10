@@ -1,0 +1,66 @@
+name: DR lipid weekly brief
+
+on:
+  push:
+    branches: [dr-lipid-daily]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
+
+permissions:
+  contents: read
+
+jobs:
+  weekly-brief:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install requests
+
+      - name: Check required secrets without exposing values
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API2D_API_KEY: ${{ secrets.API2D_API_KEY }}
+          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
+        run: |
+          test -n "$QQ_SMTP_PASSWORD" || { echo '::error::QQ_SMTP_PASSWORD is not configured.'; exit 1; }
+          if [ -z "$OPENAI_API_KEY" ] && [ -z "$API2D_API_KEY" ]; then
+            echo '::error::Neither OPENAI_API_KEY nor API2D_API_KEY is configured.'
+            exit 1
+          fi
+          echo 'Required secret presence checks passed.'
+
+      - name: Generate weekly bilingual brief
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API2D_API_KEY: ${{ secrets.API2D_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          API2D_MODEL: ${{ vars.API2D_MODEL }}
+        run: python code/weekly_brief.py --days 14 --per-query 100 --top-n 20 --minimum-score 40 --output-dir Output/weekly
+
+      - name: Send weekly brief to QQ mailbox
+        env:
+          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
+          QQ_SENDER_EMAIL: 171142515@qq.com
+          QQ_RECEIVER_EMAIL: 171142515@qq.com
+        run: |
+          python code/send_weekly_email.py \
+            --html Output/weekly/$(date +%F).html \
+            --md Output/weekly/$(date +%F).md \
+            --json Output/weekly/$(date +%F).json
+
+      - name: Upload weekly report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-lipid-weekly-brief-${{ github.run_number }}
+          path: Output/weekly/
+          if-no-files-found: warn
