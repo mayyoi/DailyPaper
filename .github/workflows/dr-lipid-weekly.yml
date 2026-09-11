@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: dr-lipid-weekly-brief
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   weekly-brief:
@@ -22,7 +22,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        # [TEST] final browser-like Bing metric validation
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -41,10 +40,11 @@ jobs:
       - name: Generate dynamic weekly brief
         env:
           WEEKLY_DAYS: '21'
-          WEEKLY_PER_QUERY: '80'
+          WEEKLY_PER_QUERY: '60'
           WEEKLY_MINIMUM_SCORE: '55'
-          WEEKLY_HARD_MAX: '60'
+          WEEKLY_HARD_MAX: '30'
           WEEKLY_OUTPUT_DIR: Output/weekly
+          JCR_MAX_PAGES: '5'
         run: python code/weekly_brief.py
       - name: Send weekly brief to QQ mailbox
         env:
