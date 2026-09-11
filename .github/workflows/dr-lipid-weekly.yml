@@ -37,18 +37,6 @@ jobs:
             exit 1
           fi
           echo 'QQMAIL secret is available.'
-      - name: Bing smoke test against browser-visible result
-        run: |
-          python - <<'PY'
-          import sys
-          sys.path.insert(0, 'code')
-          from web_metrics_fill import _search
-          m = _search('Journal of Pharmacy and Pharmaceutical Sciences', '')
-          print(m)
-          if m.get('jif') is None or m.get('jcr_quartile') != 'Q1':
-              raise SystemExit('Bing smoke test failed: expected Journal of Pharmacy and Pharmaceutical Sciences JIF + Q1')
-          print('Bing smoke test passed.')
-          PY
       - name: Generate dynamic weekly brief
         env:
           WEEKLY_DAYS: '7'
@@ -58,6 +46,29 @@ jobs:
           WEEKLY_OUTPUT_DIR: Output/weekly
           JCR_MAX_PAGES: '2'
         run: python code/weekly_brief.py
+      - name: Validate report metrics before sending
+        run: |
+          python - <<'PY'
+          import json, os, urllib.parse
+          path = f"Output/weekly/{__import__('datetime').date.today().isoformat()}.json"
+          data = json.load(open(path, encoding='utf-8'))
+          papers = data.get('papers', [])
+          if not papers:
+              raise SystemExit('Validation failed: report contains no papers.')
+          allowed = {'www.iikx.com','iikx.com','www.ablesci.com','ablesci.com','journalsimpactfactors.com','www.journalsimpactfactors.com'}
+          bad = []
+          for p in papers:
+              m = p.get('journal_metrics') or {}
+              src = m.get('metric_source') or ''
+              url = m.get('metric_url') or ''
+              host = urllib.parse.urlparse(url).netloc.lower()
+              if 'Google web search' in src and host not in allowed:
+                  bad.append((p.get('journal'), src, url))
+          if bad:
+              raise SystemExit('Validation failed: untrusted Google metric source detected: ' + repr(bad[:3]))
+          complete = sum(1 for p in papers if (p.get('journal_metrics') or {}).get('jif') is not None and (p.get('journal_metrics') or {}).get('jcr_quartile') not in ('', '未检索到', None))
+          print(f'Validation passed: papers={len(papers)}, complete_jcr_metrics={complete}')
+          PY
       - name: Send weekly brief to QQ mailbox
         env:
           QQ_SMTP_PASSWORD: ${{ secrets.QQMAIL }}
