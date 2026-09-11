@@ -1,6 +1,8 @@
 name: DR lipid weekly brief
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
