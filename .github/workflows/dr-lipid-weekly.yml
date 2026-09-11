@@ -18,7 +18,7 @@ jobs:
   weekly-brief:
     if: startsWith(github.event.head_commit.message, '[TEST]') || github.event_name != 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,14 +37,26 @@ jobs:
             exit 1
           fi
           echo 'QQMAIL secret is available.'
+      - name: Bing smoke test against browser-visible result
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'code')
+          from web_metrics_fill import _search
+          m = _search('Journal of Pharmacy and Pharmaceutical Sciences', '')
+          print(m)
+          if m.get('jif') is None or m.get('jcr_quartile') != 'Q1':
+              raise SystemExit('Bing smoke test failed: expected Journal of Pharmacy and Pharmaceutical Sciences JIF + Q1')
+          print('Bing smoke test passed.')
+          PY
       - name: Generate dynamic weekly brief
         env:
-          WEEKLY_DAYS: '21'
-          WEEKLY_PER_QUERY: '60'
+          WEEKLY_DAYS: '7'
+          WEEKLY_PER_QUERY: '30'
           WEEKLY_MINIMUM_SCORE: '55'
-          WEEKLY_HARD_MAX: '30'
+          WEEKLY_HARD_MAX: '20'
           WEEKLY_OUTPUT_DIR: Output/weekly
-          JCR_MAX_PAGES: '5'
+          JCR_MAX_PAGES: '2'
         run: python code/weekly_brief.py
       - name: Send weekly brief to QQ mailbox
         env:
