@@ -1,28 +1,35 @@
 """Journal metrics for the DR x lipid weekly brief.
 
-JCR 2026 corresponds to the 2025 metric year. The machine-readable public
-JCR-based directory is the first source. To improve coverage, the module also
-uses OpenAlex to discover a journal homepage and checks the journal/publisher
-page for an explicitly labelled Impact Factor/JIF. Homepage values are only
-accepted when the page contains an explicit impact-factor label; otherwise the
-paper remains eligible but the report marks the metric as unavailable.
+Metric lookup order:
+1) public JCR-based directory;
+2) journal/publisher homepage when it explicitly labels an Impact Factor/JIF;
+3) Bing web search as a last-resort discovery layer for Impact Factor + JCR quartile.
+
+Bing-derived values are explicitly marked as web-search evidence and are NOT
+presented as independently verified Clarivate JCR data. This is intentional:
+search engines can surface stale or conflicting third-party values.
 """
 from __future__ import annotations
 
 import html as html_lib
 import re
 from typing import Dict, Iterable, List
+from urllib.parse import quote_plus
 
 import requests
 
 BASE = "https://journalsimpactfactors.com"
 OPENALEX = "https://api.openalex.org"
+BING = "https://www.bing.com/search"
 CATEGORY_PAGES = [
     ("ophthalmology-vision-science", "Medicine"),
     ("endocrinology-metabolism", "Medicine"),
     ("molecular-cell-biology", "Life Sciences"),
 ]
-HEADERS = {"User-Agent": "mayyoi/DailyPaper DR lipid weekly literature radar"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "Chrome/140 Safari/537.36 DailyPaper/1.0"
+}
 
 
 def _clean(value: str) -> str:
@@ -58,10 +65,20 @@ def _parse_page(text: str) -> Dict[str, Dict]:
         quartile = cells[4] if len(cells) > 4 else ""
         if not re.fullmatch(r"(?:\d+(?:\.\d+)?|N/A)", jif or "") or jif == "N/A" or not quartile or quartile == "N/A":
             continue
-        record = {"journal":journal_name,"issn":issns[0] if issns else "","jif":float(jif),"jif_year":2025,"jcr_release":2026,"jcr_quartile":quartile,"jcr_category_rank":"","metric_source":"Journals Impact Factors (JCR-based public directory)","metric_url":BASE+"/"}
+        record = {
+            "journal": journal_name,
+            "issn": issns[0] if issns else "",
+            "jif": float(jif),
+            "jif_year": 2025,
+            "jcr_release": 2026,
+            "jcr_quartile": quartile,
+            "jcr_category_rank": "",
+            "metric_source": "Journals Impact Factors (JCR-based public directory)",
+            "metric_url": BASE + "/",
+        }
         metrics[_norm(journal_name)] = record
         for issn in issns:
-            metrics[issn.replace("-","")] = record
+            metrics[issn.replace("-", "")] = record
     return metrics
 
 
@@ -71,14 +88,21 @@ def fetch_jcr_metrics(timeout: int = 30, max_pages: int = 20) -> Dict[str, Dict]
         empty_streak = 0
         for page in range(1, max_pages + 1):
             try:
-                response = requests.get(f"{BASE}/subsubject.php", params={"slug":slug,"subject":subject,"page":page}, timeout=timeout, headers=HEADERS)
+                response = requests.get(
+                    f"{BASE}/subsubject.php",
+                    params={"slug": slug, "subject": subject, "page": page},
+                    timeout=timeout,
+                    headers=HEADERS,
+                )
                 response.raise_for_status()
                 parsed = _parse_page(response.text)
                 if not parsed:
                     empty_streak += 1
-                    if empty_streak >= 2: break
+                    if empty_streak >= 2:
+                        break
                 else:
-                    empty_streak = 0; metrics.update(parsed)
+                    empty_streak = 0
+                    metrics.update(parsed)
             except Exception as exc:
                 print(f"[jcr] failed {slug} page={page}: {exc}")
                 break
@@ -88,16 +112,18 @@ def fetch_jcr_metrics(timeout: int = 30, max_pages: int = 20) -> Dict[str, Dict]
 
 def _openalex_source(journal: str, issn: str = "") -> Dict:
     try:
-        params = {"search":journal,"per-page":10}
+        params = {"search": journal, "per-page": 10}
         if issn:
             params["filter"] = f"issn:{issn}"
-        data = requests.get(f"{OPENALEX}/sources", params=params, timeout=20, headers=HEADERS).json()
+        data = requests.get(
+            f"{OPENALEX}/sources", params=params, timeout=20, headers=HEADERS
+        ).json()
         results = data.get("results") or []
-        if not results: return {}
-        # Prefer exact normalized display-name match.
+        if not results:
+            return {}
         target = _norm(journal)
         for item in results:
-            if _norm(item.get("display_name","")) == target:
+            if _norm(item.get("display_name", "")) == target:
                 return item
         return results[0]
     except Exception:
@@ -113,9 +139,9 @@ def _homepage_impact_factor(journal: str, issn: str = "") -> Dict:
     try:
         r = requests.get(homepage, timeout=20, headers=HEADERS, allow_redirects=True)
         r.raise_for_status()
-        text = _clean(re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", r.text, flags=re.I|re.S))
-        # Require the label and a nearby numeric value. Accept common journal wording,
-        # but reject generic metrics such as CiteScore unless Impact Factor is explicit.
+        text = _clean(
+            re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", r.text, flags=re.I | re.S)
+        )
         patterns = [
             r"(?:journal\s+)?impact\s+factor[^0-9]{0,80}(\d+(?:\.\d+)?)",
             r"(?:JIF|JCR)\s*(?:2025|2024|2023)?[^0-9]{0,40}(\d+(?:\.\d+)?)",
@@ -125,26 +151,161 @@ def _homepage_impact_factor(journal: str, issn: str = "") -> Dict:
             if m:
                 value = float(m.group(1))
                 if 0 <= value <= 100:
-                    return {"jif":value,"jif_year":2025,"jcr_release":2026,"jcr_quartile":"","jcr_category_rank":"","metric_source":"Journal homepage (explicit Impact Factor label; not independently verified as Clarivate JCR)","metric_url":homepage,"journal":journal,"issn":issn}
+                    return {
+                        "jif": value,
+                        "jif_year": 2025,
+                        "jcr_release": 2026,
+                        "jcr_quartile": "",
+                        "jcr_category_rank": "",
+                        "metric_source": "Journal homepage (explicit Impact Factor label; not independently verified as Clarivate JCR)",
+                        "metric_url": homepage,
+                        "journal": journal,
+                        "issn": issn,
+                    }
     except Exception as exc:
         print(f"[jif-home] failed {journal}: {exc}")
     return {}
 
 
+def _bing_results(query: str, timeout: int = 20) -> List[Dict[str, str]]:
+    """Return Bing result title/snippet/url records without requiring an API key."""
+    try:
+        r = requests.get(BING, params={"q": query, "count": 10, "setlang": "en-US"}, timeout=timeout, headers=HEADERS)
+        r.raise_for_status()
+        html = r.text
+        results = []
+        for block in re.findall(r'<li class="b_algo".*?</li>', html, flags=re.I | re.S):
+            title_m = re.search(r'<h2.*?>\s*<a[^>]*>(.*?)</a>', block, flags=re.I | re.S)
+            snippet_m = re.search(r'<p[^>]*>(.*?)</p>', block, flags=re.I | re.S)
+            url_m = re.search(r'<h2.*?>\s*<a[^>]+href="([^"]+)"', block, flags=re.I | re.S)
+            if title_m or snippet_m:
+                results.append({
+                    "title": _clean(re.sub(r"<[^>]+>", " ", title_m.group(1))) if title_m else "",
+                    "snippet": _clean(re.sub(r"<[^>]+>", " ", snippet_m.group(1))) if snippet_m else "",
+                    "url": html_lib.unescape(url_m.group(1)) if url_m else "",
+                })
+        return results
+    except Exception as exc:
+        print(f"[bing] search failed for {query!r}: {exc}")
+        return []
+
+
+def _extract_jif(text: str) -> float | None:
+    patterns = [
+        r"(?:impact\s+factor|journal\s+impact\s+factor|JIF)\s*(?:for\s+2025|2025)?\s*[:=]?\s*(\d+(?:\.\d+)?)",
+        r"(?:2025\s+)?impact\s+factor\s*[:=]?\s*(\d+(?:\.\d+)?)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, flags=re.I)
+        if m:
+            value = float(m.group(1))
+            if 0 <= value <= 100:
+                return value
+    return None
+
+
+def _extract_quartile(text: str) -> str:
+    # Require an explicit quartile cue; do not interpret a bare Q1/Q2 in an unrelated context.
+    patterns = [
+        r"(?:JCR\s+)?quartile\s*[:=\-]?\s*(Q[1-4])",
+        r"(?:JCR|WOS|Web\s+of\s+Science)[^Q]{0,50}(Q[1-4])",
+        r"\b(Q[1-4])\s+(?:journal|quartile)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, flags=re.I)
+        if m:
+            return m.group(1).upper()
+    return ""
+
+
+def _bing_journal_metrics(journal: str, issn: str = "") -> Dict:
+    """Use Bing only after structured sources fail.
+
+    We look for evidence where the same search result explicitly mentions the
+    journal and an Impact Factor and/or JCR quartile. The output records Bing
+    provenance so it cannot be mistaken for an official Clarivate lookup.
+    """
+    queries = [
+        f'"{journal}" "impact factor" "JCR quartile"',
+        f'"{journal}" "impact factor" Q1 Q2 Q3 Q4',
+    ]
+    if issn:
+        queries.insert(0, f'"{journal}" "{issn}" "impact factor" "JCR"')
+    candidates = []
+    for query in queries:
+        candidates.extend(_bing_results(query))
+
+    target = _norm(journal)
+    best = None
+    for item in candidates:
+        combined = _clean(item.get("title", "") + " " + item.get("snippet", ""))
+        if "impact factor" not in combined.lower() and "jif" not in combined.lower():
+            continue
+        # Prefer results that contain the journal title tokens or ISSN.
+        title_norm = _norm(item.get("title", ""))
+        snippet_norm = _norm(item.get("snippet", ""))
+        journal_hit = target and (target in title_norm or target in snippet_norm)
+        issn_hit = bool(issn and issn in combined)
+        if not (journal_hit or issn_hit):
+            continue
+        jif = _extract_jif(combined)
+        quartile = _extract_quartile(combined)
+        if jif is None and not quartile:
+            continue
+        score = (4 if journal_hit else 2) + (2 if jif is not None else 0) + (2 if quartile else 0)
+        # Prefer a result that supplies both fields in the same snippet/title.
+        if best is None or score > best[0]:
+            best = (score, item, jif, quartile)
+
+    if best is None:
+        return {}
+    _, item, jif, quartile = best
+    return {
+        "journal": journal,
+        "issn": issn,
+        "jif": jif,
+        "jif_year": 2025 if jif is not None else None,
+        "jcr_release": 2026 if quartile else None,
+        "jcr_quartile": quartile,
+        "jcr_category_rank": "",
+        "metric_source": "Bing web search (third-party evidence; not independently verified as Clarivate JCR)",
+        "metric_url": item.get("url", BING + "?q=" + quote_plus(queries[0])),
+        "metric_search_query": queries[0],
+    }
+
+
 def lookup_journal_metric(journal: str, issn: str, metrics: Dict[str, Dict]) -> Dict:
-    for key in [issn.replace("-","").strip(), _norm(journal)]:
-        if key and key in metrics: return metrics[key]
+    for key in [issn.replace("-", "").strip(), _norm(journal)]:
+        if key and key in metrics:
+            return metrics[key]
     homepage = _homepage_impact_factor(journal, issn)
     if homepage:
         return homepage
-    return {"journal":journal,"issn":issn,"jif":None,"jif_year":2025,"jcr_release":2026,"jcr_quartile":"未检索到","jcr_category_rank":"","metric_source":"未能从当前公开JCR-based目录或期刊首页可靠匹配；不填猜测值","metric_url":BASE+"/"}
+    bing = _bing_journal_metrics(journal, issn)
+    if bing:
+        return bing
+    return {
+        "journal": journal,
+        "issn": issn,
+        "jif": None,
+        "jif_year": 2025,
+        "jcr_release": 2026,
+        "jcr_quartile": "未检索到",
+        "jcr_category_rank": "",
+        "metric_source": "未能从公开JCR-based目录、期刊首页或Bing搜索可靠匹配；不填猜测值",
+        "metric_url": BASE + "/",
+    }
 
 
 def annotate_journal_metrics(records: Iterable[Dict]) -> List[Dict]:
-    records=list(records); metrics=fetch_jcr_metrics(); missing=[]
+    records = list(records)
+    metrics = fetch_jcr_metrics()
+    missing = []
     for record in records:
-        metric=lookup_journal_metric(record.get("journal",""),record.get("issn",""),metrics)
-        record["journal_metrics"]=metric
-        if metric.get("jif") is None: missing.append(record.get("journal",""))
-    if missing: print(f"[jcr] unmatched journals: {', '.join(sorted(set(x for x in missing if x)))}")
+        metric = lookup_journal_metric(record.get("journal", ""), record.get("issn", ""), metrics)
+        record["journal_metrics"] = metric
+        if metric.get("jif") is None or not metric.get("jcr_quartile"):
+            missing.append(record.get("journal", ""))
+    if missing:
+        print(f"[jcr] incomplete journals after Bing fallback: {', '.join(sorted(set(x for x in missing if x)))}")
     return records
