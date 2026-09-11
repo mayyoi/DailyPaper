@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   weekly-brief:
+    if: startsWith(github.event.head_commit.message, '[TEST]') || github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
