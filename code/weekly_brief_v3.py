@@ -18,6 +18,7 @@ from metadata_enrichment import enrich_selected_records
 from literature_sources import google_scholar_url, search_all
 from relevance_ranker import rank_records
 from translation_service import zh as robust_zh
+from web_metrics_fill import fill_missing
 
 
 def _metric_text_with_warning(record):
@@ -63,6 +64,9 @@ def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, outpu
     quality_pool = [r for r in ranked if int(r.get("relevance_score",0)) >= 40]
     if hard_max > 0: quality_pool = quality_pool[:hard_max]
     quality_pool = annotate_journal_metrics(quality_pool)
+    # If the structured directory and journal homepage do not provide a complete
+    # metric, try Bing robustly (RSS + HTML) and then Google as a secondary web search.
+    quality_pool = fill_missing(quality_pool)
     strong = [r for r in quality_pool if int(r.get("relevance_score",0)) >= minimum_score]
     selected = strong if len(strong) >= 5 else quality_pool
     if hard_max > 0: selected = selected[:hard_max]
