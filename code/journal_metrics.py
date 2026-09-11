@@ -90,12 +90,7 @@ def fetch_jcr_metrics(timeout: int = 30, max_pages: int | None = None) -> Dict[s
         empty_streak = 0
         for page in range(1, max_pages + 1):
             try:
-                response = requests.get(
-                    f"{BASE}/subsubject.php",
-                    params={"slug": slug, "subject": subject, "page": page},
-                    timeout=timeout,
-                    headers=HEADERS,
-                )
+                response = requests.get(f"{BASE}/subsubject.php", params={"slug": slug, "subject": subject, "page": page}, timeout=timeout, headers=HEADERS)
                 response.raise_for_status()
                 parsed = _parse_page(response.text)
                 if not parsed:
@@ -261,5 +256,6 @@ def annotate_journal_metrics(records: Iterable[Dict]) -> List[Dict]:
         if metric.get("jif") is None or not metric.get("jcr_quartile"):
             missing.append(record.get("journal", ""))
     if missing:
-        print(f"[jcr] incomplete journals after Bing fallback: {', '.join(sorted(set(x for x in missing if x))}")
+        missing_names = ", ".join(sorted(set(x for x in missing if x)))
+        print(f"[jcr] incomplete journals after Bing fallback: {missing_names}")
     return records
