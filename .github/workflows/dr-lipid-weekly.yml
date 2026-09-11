@@ -1,8 +1,6 @@
 name: DR lipid weekly brief
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
@@ -11,14 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: dr-lipid-weekly-final-test
-  cancel-in-progress: true
+  group: dr-lipid-weekly-brief
+  cancel-in-progress: false
 
 jobs:
   weekly-brief:
-    if: startsWith(github.event.head_commit.message, '[TEST]') || github.event_name != 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,42 +36,12 @@ jobs:
           echo 'QQMAIL secret is available.'
       - name: Generate dynamic weekly brief
         env:
-          WEEKLY_DAYS: '7'
-          WEEKLY_PER_QUERY: '10'
+          WEEKLY_DAYS: '21'
+          WEEKLY_PER_QUERY: '80'
           WEEKLY_MINIMUM_SCORE: '55'
-          WEEKLY_HARD_MAX: '10'
+          WEEKLY_HARD_MAX: '60'
           WEEKLY_OUTPUT_DIR: Output/weekly
-          JCR_MAX_PAGES: '1'
         run: python code/weekly_brief.py
-      - name: Apply verified current metrics to controlled test report
-        run: python code/patch_current_test_metrics.py
-      - name: Validate report metrics before sending
-        run: |
-          python - <<'PY'
-          import json, urllib.parse, datetime
-          path=f"Output/weekly/{datetime.date.today().isoformat()}.json"
-          data=json.load(open(path,encoding='utf-8')); papers=data.get('papers',[])
-          if not papers: raise SystemExit('Validation failed: report contains no papers.')
-          expected={
-            'Lipids in Health and Disease':(6.9,'Q1'),
-            'Frontiers in Endocrinology':(4.6,'Q1'),
-            'Scientific Reports':(4.9,'Q1'),
-            'Frontiers in Immunology':(7.0,'Q1'),
-            'Biology':(4.3,'Q1'),
-            'International journal of ophthalmology':(1.8,'Q3'),
-            'International Journal of Ophthalmology':(1.8,'Q3'),
-            'Aquaculture Reports':(3.7,'Q1'),
-          }
-          for p in papers:
-              j=p.get('journal',''); m=p.get('journal_metrics') or {}
-              if j in expected and (m.get('jif'),m.get('jcr_quartile')) != expected[j]:
-                  raise SystemExit(f'Validation failed for {j}: {m}')
-              src=m.get('metric_source') or ''; host=urllib.parse.urlparse(m.get('metric_url') or '').netloc.lower()
-              if 'Google web search' in src and host not in {'www.iikx.com','iikx.com','www.ablesci.com','ablesci.com','journalsimpactfactors.com','www.journalsimpactfactors.com'}:
-                  raise SystemExit(f'Validation failed: untrusted Google source for {j}')
-          complete=sum(1 for p in papers if (p.get('journal_metrics') or {}).get('jif') is not None and (p.get('journal_metrics') or {}).get('jcr_quartile') not in ('','未检索到',None))
-          print(f'Validation passed: papers={len(papers)}, complete_jcr_metrics={complete}')
-          PY
       - name: Send weekly brief to QQ mailbox
         env:
           QQ_SMTP_PASSWORD: ${{ secrets.QQMAIL }}
