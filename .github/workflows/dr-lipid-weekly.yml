@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dr-lipid-weekly-brief
+  group: dr-lipid-weekly-final-test
   cancel-in-progress: true
 
 jobs:
