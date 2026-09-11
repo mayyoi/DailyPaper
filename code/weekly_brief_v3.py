@@ -17,13 +17,15 @@ from journal_metrics import annotate_journal_metrics
 from metadata_enrichment import enrich_selected_records
 from literature_sources import google_scholar_url, search_all
 from relevance_ranker import rank_records
+from translation_service import zh as robust_zh
 
 
 def _metric_text_with_warning(record):
     m = record.get("journal_metrics") or {}
     if m.get("jif") is None:
         return "⚠️ 未可靠匹配到当前JCR-based JIF + JCR Q；本周因DR×脂质相关性较高而硬纳入；不填猜测值"
-    return f"JCR 2026（2025指标年）：JIF {m['jif']:.3g}；{m.get('jcr_quartile','N/A')}；类别排名 {m.get('jcr_category_rank') or '公开目录未提供'}"
+    source = m.get("metric_source") or "JCR-based公开目录"
+    return f"JCR 2026（2025指标年）：JIF {m['jif']:.3g}；{m.get('jcr_quartile','N/A')}；类别排名 {m.get('jcr_category_rank') or '公开目录未提供'}；来源：{source}"
 
 
 def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, output_dir="Output/weekly"):
@@ -46,7 +48,9 @@ def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, outpu
         return sources._parse_pubmed_xml(response.text,query)
     sources.search_pubmed = fixed_pubmed
 
-    # Make the warning visible in both the HTML and Markdown renderers without changing v2's public API.
+    # Replace the old best-effort translator with a response-validated biomedical translator.
+    # It refuses to silently return English as Chinese when the translation service fails.
+    v2.zh = robust_zh
     v2.journal_metric_text = _metric_text_with_warning
 
     print(f"[retrieve] days={days} per_query={per_query}")
@@ -57,8 +61,6 @@ def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, outpu
     records = enrich_direction_tags(records)
     ranked = rank_records(records)
 
-    # JCR completeness is a preference, not an exclusion gate. Strong papers can be
-    # hard-included when the public JCR-based directory cannot reliably match them.
     quality_pool = [r for r in ranked if int(r.get("relevance_score",0)) >= 40]
     if hard_max > 0:
         quality_pool = quality_pool[:hard_max]
