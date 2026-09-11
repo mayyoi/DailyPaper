@@ -22,14 +22,17 @@ from translation_service import zh as robust_zh
 
 def _metric_text_with_warning(record):
     m = record.get("journal_metrics") or {}
-    if m.get("jif") is None:
-        return "⚠️ 未可靠匹配到当前JCR-based JIF + JCR Q；本周因DR×脂质相关性较高而硬纳入；不填猜测值"
+    jif = m.get("jif")
+    q = m.get("jcr_quartile")
     source = m.get("metric_source") or "JCR-based公开目录"
-    return f"JCR 2026（2025指标年）：JIF {m['jif']:.3g}；{m.get('jcr_quartile','N/A')}；类别排名 {m.get('jcr_category_rank') or '公开目录未提供'}；来源：{source}"
+    if jif is not None and q and q != "未检索到":
+        return f"JCR 2026（2025指标年）：JIF {jif:.3g}；{q}；类别排名 {m.get('jcr_category_rank') or '公开目录未提供'}；来源：{source}"
+    if jif is not None:
+        return f"JIF {jif:.3g}（期刊首页明确标注）；⚠️ 当前未可靠匹配到JCR Q；来源：{source}。本周因DR×脂质相关性较高而纳入，不把首页JIF冒充为JCR完整指标。"
+    return "⚠️ 未可靠匹配到当前JCR-based JIF + JCR Q；本周因DR×脂质相关性较高而硬纳入；不填猜测值"
 
 
 def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, output_dir="Output/weekly"):
-    # Patch PubMed relative-date syntax for the source helper.
     original_pubmed = sources.search_pubmed
     def fixed_pubmed(query, retmax=100, days=None, email=None, api_key=None):
         if days is None or days <= 0:
@@ -47,9 +50,6 @@ def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, outpu
         response = requests.get(f"{sources.PUBMED_BASE}/efetch.fcgi",params=fetch,timeout=60); response.raise_for_status()
         return sources._parse_pubmed_xml(response.text,query)
     sources.search_pubmed = fixed_pubmed
-
-    # Replace the old best-effort translator with a response-validated biomedical translator.
-    # It refuses to silently return English as Chinese when the translation service fails.
     v2.zh = robust_zh
     v2.journal_metric_text = _metric_text_with_warning
 
@@ -60,30 +60,32 @@ def run_weekly_brief(days=21, per_query=80, minimum_score=55, hard_max=60, outpu
     candidates = len(records)
     records = enrich_direction_tags(records)
     ranked = rank_records(records)
-
     quality_pool = [r for r in ranked if int(r.get("relevance_score",0)) >= 40]
-    if hard_max > 0:
-        quality_pool = quality_pool[:hard_max]
+    if hard_max > 0: quality_pool = quality_pool[:hard_max]
     quality_pool = annotate_journal_metrics(quality_pool)
     strong = [r for r in quality_pool if int(r.get("relevance_score",0)) >= minimum_score]
     selected = strong if len(strong) >= 5 else quality_pool
-    if hard_max > 0:
-        selected = selected[:hard_max]
+    if hard_max > 0: selected = selected[:hard_max]
     if not selected:
         raise RuntimeError("No paper meets the minimum DR×lipid relevance threshold; refusing to send an empty brief.")
 
-    complete_n = 0
-    missing_n = 0
+    complete_n = 0; missing_n = 0
     for r in selected:
         m = r.get("journal_metrics") or {}
-        complete = m.get("jif") is not None and bool(m.get("jcr_quartile"))
+        complete = m.get("jif") is not None and bool(m.get("jcr_quartile")) and m.get("jcr_quartile") != "未检索到"
         r["jcr_metric_complete"] = bool(complete)
-        r["jcr_metric_note"] = "JIF + JCR Q已匹配" if complete else "⚠️ 未可靠匹配到当前JCR-based JIF + JCR Q；本周按高相关性硬纳入，不填猜测值"
+        if complete:
+            r["jcr_metric_note"] = "JIF + JCR Q已匹配"
+            complete_n += 1
+        elif m.get("jif") is not None:
+            r["jcr_metric_note"] = "⚠️ 期刊首页明确标注JIF，但当前未可靠匹配JCR Q；本周按高相关性纳入，不将首页JIF冒充完整JCR指标"
+            missing_n += 1
+        else:
+            r["jcr_metric_note"] = "⚠️ 未可靠匹配到当前JCR-based JIF + JCR Q；本周按高相关性硬纳入，不填猜测值"
+            missing_n += 1
         r["hard_included_due_to_missing_jcr"] = not complete
-        if complete: complete_n += 1
-        else: missing_n += 1
 
-    print(f"[rank] raw={raw_count} candidates={candidates} ranked={len(ranked)} quality_pool={len(quality_pool)} strong={len(strong)} selected={len(selected)} jcr_complete={complete_n} jcr_missing={missing_n}")
+    print(f"[rank] raw={raw_count} candidates={candidates} ranked={len(ranked)} quality_pool={len(quality_pool)} strong={len(strong)} selected={len(selected)} jcr_complete={complete_n} jcr_missing_or_partial={missing_n}")
     enrich_selected_records(selected)
     for i, r in enumerate(selected,1):
         print(f"[annotate] {i}/{len(selected)} {r.get('title','')[:90]}")
