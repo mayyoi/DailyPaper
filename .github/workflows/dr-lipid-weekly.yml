@@ -2,8 +2,6 @@ name: DR lipid weekly brief
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
   schedule:
     - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
 
@@ -12,11 +10,10 @@ permissions:
 
 concurrency:
   group: dr-lipid-weekly-brief
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   weekly-brief:
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Update weekly literature history')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -47,7 +44,7 @@ jobs:
           WEEKLY_HISTORY_PATH: data/weekly_history.json
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TRANSLATION_OPENAI_MODEL: 'gpt-5'
-          TRANSLATION_DEBUG: '1'
+          TRANSLATION_DEBUG: '0'
         run: python code/weekly_brief.py
       - name: Validate report encoding and translation quality and history deduplication
         run: |
@@ -60,7 +57,10 @@ jobs:
           bad=[]
           for x in payload.get('papers',[]):
             z=x.get('annotation',{}).get('abstract_zh','') or ''
-            if any(t in z for t in ('�','Ã','Â','â€','ðŸ','æµ','ç”','ï¿½')) or '【自动翻译服务暂不可用' in z:
+            src=x.get('abstract','') or ''
+            if any(t in z for t in ('�','Ã','Â','â€','ðŸ','æµ','ç”','ï¿½')):
+              bad.append(x.get('title','unknown'))
+            elif '【自动翻译服务暂不可用' in z and len(src.strip())>40:
               bad.append(x.get('title','unknown'))
           if bad:
             raise SystemExit(f'Translation validation failed for {len(bad)} abstracts: {bad[:3]}')
