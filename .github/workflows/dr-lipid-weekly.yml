@@ -2,11 +2,13 @@ name: DR lipid weekly brief
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   schedule:
     - cron: '0 0 * * 1' # Monday 08:00 China/Singapore time (UTC+8)
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dr-lipid-weekly-brief
@@ -14,6 +16,7 @@ concurrency:
 
 jobs:
   weekly-brief:
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Update weekly literature history')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -41,7 +44,35 @@ jobs:
           WEEKLY_MINIMUM_SCORE: '55'
           WEEKLY_HARD_MAX: '60'
           WEEKLY_OUTPUT_DIR: Output/weekly
+          WEEKLY_HISTORY_PATH: data/weekly_history.json
         run: python code/weekly_brief.py
+      - name: Validate report encoding and history deduplication
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          out=pathlib.Path('Output/weekly')
+          d=sorted(out.glob('*.json'))[-1]
+          payload=json.loads(d.read_text(encoding='utf-8'))
+          html=sorted(out.glob('*.html'))[-1].read_text(encoding='utf-8')
+          bad=sum(1 for x in payload.get('papers',[]) if '�' in (x.get('annotation',{}).get('abstract_zh','') or '') or 'Ã' in (x.get('annotation',{}).get('abstract_zh','') or ''))
+          if bad:
+            raise SystemExit(f'Encoding validation failed: {bad} translated abstracts contain mojibake markers.')
+          if not html.startswith('<!doctype html>') or 'charset=UTF-8' not in html:
+            raise SystemExit('HTML UTF-8 header validation failed.')
+          hist=json.loads(pathlib.Path('data/weekly_history.json').read_text(encoding='utf-8'))
+          hist_keys=set()
+          for r in hist.get('papers',[]):
+            for k,v in [('pmid',r.get('pmid')),('doi',r.get('doi')),('title',r.get('title'))]:
+              if v: hist_keys.add(k+':'+re.sub(r'[^a-z0-9]+','',str(v).lower()) if k=='title' else k+':'+str(v).lower())
+          for r in payload.get('papers',[]):
+            keys=[]
+            if r.get('pmid'): keys.append('pmid:'+str(r['pmid']).lower())
+            if r.get('doi'): keys.append('doi:'+str(r['doi']).lower().replace('https://doi.org/',''))
+            if r.get('title'): keys.append('title:'+re.sub(r'[^a-z0-9]+','',str(r['title']).lower()))
+            if any(k in hist_keys for k in keys):
+              raise SystemExit('History validation failed: newly selected paper already exists in history.')
+          print('Encoding and history validation passed.')
+          PY
       - name: Send weekly brief to QQ mailbox
         env:
           QQ_SMTP_PASSWORD: ${{ secrets.QQMAIL }}
@@ -52,6 +83,19 @@ jobs:
             --html Output/weekly/$(date +%F).html \
             --md Output/weekly/$(date +%F).md \
             --json Output/weekly/$(date +%F).json
+      - name: Update persistent literature history after successful email
+        run: python code/update_weekly_history.py --report Output/weekly/$(date +%F).json --history data/weekly_history.json
+      - name: Commit updated literature history
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/weekly_history.json
+          if git diff --cached --quiet; then
+            echo 'No history changes to commit.'
+          else
+            git commit -m 'Update weekly literature history'
+            git push
+          fi
       - name: Upload weekly report artifact
         if: always()
         uses: actions/upload-artifact@v4
