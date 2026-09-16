@@ -1,36 +1,214 @@
 {
   "version": 1,
   "papers": [
-    {"pmid":"42713229","doi":"10.3389/jpps.2026.16995","title":"Fenofibrate in ophthalmology: therapeutic efficacy and mechanisms."},
-    {"pmid":"42676402","doi":"10.3389/fendo.2026.1804058","title":"Combined TyG index and systemic inflammation indices as predictors for asteroid hyalosis: a hospital-based cross-sectional study."},
-    {"pmid":"","doi":"10.3390/nu18172870","title":"Targeting Ferroptosis, Pyroptosis, and NRF2 Signaling with Dietary Polyphenols in Diabetic Microvascular Complications: An Integrative Review"},
-    {"pmid":"42608342","doi":"10.1111/dom.71230","title":"Therapies for Cardiovascular-Kidney-Liver-Metabolic Syndrome: Reappraisal of Fibrates."},
-    {"pmid":"42639213","doi":"10.18240/ijo.2026.09.21","title":"Targeting ferroptosis in ocular diseases: mechanisms, clinical implications, and therapeutic horizons."},
-    {"pmid":"","doi":"10.1186/s12944-026-03056-4","title":"Composite metabolic indices are associated with severity of proliferative diabetic retinopathy in type 2 diabetes: a three-centre cross-sectional study"},
-    {"pmid":"42703549","doi":"10.2147/dmso.s595209","title":"6-Gingerol Regulates the Exosomal miR-148b-3p/ACSL4/Ferroptosis Axis in an in vitro Model of Diabetic Retinopathy."},
-    {"pmid":"42656923","doi":"10.1002/ccs3.70108","title":"FOXO6 inhibits SMURF2‐mediated ubiquitination and degradation of NR4A1 to promote retinal pigment epithelial cell ferroptosis in diabetic retinopathy"},
-    {"pmid":"42461929","doi":"10.2337/db26-0053","title":"Long-Acting RXR Agonism Preserves Retinal Function and Modulates Inflammation in Diabetic Retinopathy."},
-    {"pmid":"42526719","doi":"10.1016/j.survophthal.2026.07.013","title":"The hard exudate pathway: Biological mechanisms, imaging correlates, and clinical implications."},
-    {"pmid":"42714715","doi":"10.1007/s11033-026-12608-x","title":"Acteoside alleviates high glucose-induced ROS accumulation and ferroptosis in ARPE-19 cells by activating the NRF2 signaling pathway."},
-    {"pmid":"42668075","doi":"10.1016/j.phrs.2026.108415","title":"Decoding the bile acid–mitochondria axis: Implications for disease management and therapeutic opportunities"},
-    {"pmid":"","doi":"10.3390/biom16091314","title":"Proteomic Analysis of Retinas from Two Different Type-1 Diabetic Models"},
-    {"pmid":"42603577","doi":"10.1016/j.phrs.2026.108388","title":"Vascular complications: Mechanisms and therapeutic perspectives."},
-    {"pmid":"42615799","doi":"10.1167/iovs.67.10.48","title":"Triglyceride-Glucose-Related Indexes as Risk Factors for Vision-Threatening Ocular Diseases: A Prospective UK Biobank Study."},
-    {"pmid":"","doi":"10.3389/fendo.2026.1914361","title":"COVID-19 and subsequent risk of coded diabetic retinopathy in patients with type 2 diabetes: a multicenter propensity score-matched cohort study"},
-    {"pmid":"42276504","doi":"10.1016/j.exer.2026.111121","title":"To delineate the role of Zinc Alpha 2 Glycoprotein in the pathophysiology of diabetic retinopathy using in vitro models of retinal endothelial cells and pericytes"},
-    {"pmid":"41875416","doi":"10.1097/iae.0000000000004843","title":"EFFICACY OF COMBINED DEXAMETHASONE IMPLANT AND NAVIGATED SUBTHRESHOLD MICROPULSE YELLOW LASER IN DIABETIC MACULAR EDEMA"},
-    {"pmid":"","doi":"10.3389/fendo.2026.1899237","title":"Hormonal metabolic burden in diabetic retinopathy: the diabetic retina as an endocrine-responsive target organ"},
-    {"pmid":"42644680","doi":"10.1167/tvst.15.8.26","title":"Machine Learning and Metabolomics to Characterize Warburg-Like Metabolic Subtypes in Human Retinal Endothelial Cells Exposed to Risk Factors Associated With Proliferative Diabetic Retinopathy"},
-    {"pmid":"","doi":"10.1111/coin.70288","title":"Deep Learning‐Based Classification of Diabetic Retinopathy and Macular Edema Diseases"},
-    {"pmid":"42626053","doi":"10.5662/wjm.115265","title":"Artificial intelligence in ophthalmology: From diagnostic accuracy to clinical application."},
-    {"pmid":"42722111","doi":"10.1016/j.ophtha.2026.09.005","title":"Association of Common Anti-Inflammatory Medications with Reduced Risk of Vision-Threatening Diabetic Retinopathy in Type 2 Diabetes."},
-    {"pmid":"42720704","doi":"10.1007/s10792-026-04272-8","title":"Alpinia Oxyphylla-Shenqi Siwu Decoction protects against high glucose-induced retinal pigment epithelial cell injury involving the PI3K/AKT/mTOR pathway."},
-    {"pmid":"42720123","doi":"10.1080/02713683.2026.2726019","title":"Redistribution of Aquaporin Proteins in Retinal Blood Vessels in Human Diabetic Retinopathy."},
-    {"pmid":"","doi":"10.3389/fimmu.2026.1892763","title":"Photoreceptor outer segments promote the accumulation of lipid droplets in microglia by reprogramming lipid metabolism"},
-    {"pmid":"","doi":"10.3390/biology15181581","title":"Compartment-Specific Immune, Endothelial, and Fibrotic Programs in Diabetic Retinopathy: An Integrative Multi-Cohort Transcriptomic Study"},
-    {"pmid":"","doi":"10.1038/s41598-026-70676-2","title":"Performance of AI-based diabetic retinopathy screening is highly dependent on evaluation setting: a five-year, multi-framework study"},
-    {"pmid":"42709274","doi":"10.1007/s10792-026-04269-3","title":"Pre- and post-COVID-19 changes in retinal disease patterns in Türkiye: insights from a tertiary hospital."},
-    {"pmid":"42706515","doi":"10.1186/s12886-026-05298-3","title":"Association between macular edema area on optical coherence tomography and Amsler grid sensitivity in diabetic macular edema: a cross-sectional study."},
-    {"pmid":"42639255","doi":"10.18240/ijo.2026.09.05","title":"Desferrioxamine attenuating high glucose-induced ferroptosis and inflammatory responses in Müller glial cells &lt;i&gt;via&lt;/i&gt; Nrf2/TXNRD1 pathway."}
+    {
+      "pmid": "42713229",
+      "doi": "10.3389/jpps.2026.16995",
+      "title": "Fenofibrate in ophthalmology: therapeutic efficacy and mechanisms."
+    },
+    {
+      "pmid": "42676402",
+      "doi": "10.3389/fendo.2026.1804058",
+      "title": "Combined TyG index and systemic inflammation indices as predictors for asteroid hyalosis: a hospital-based cross-sectional study."
+    },
+    {
+      "pmid": "",
+      "doi": "10.3390/nu18172870",
+      "title": "Targeting Ferroptosis, Pyroptosis, and NRF2 Signaling with Dietary Polyphenols in Diabetic Microvascular Complications: An Integrative Review"
+    },
+    {
+      "pmid": "42608342",
+      "doi": "10.1111/dom.71230",
+      "title": "Therapies for Cardiovascular-Kidney-Liver-Metabolic Syndrome: Reappraisal of Fibrates."
+    },
+    {
+      "pmid": "42639213",
+      "doi": "10.18240/ijo.2026.09.21",
+      "title": "Targeting ferroptosis in ocular diseases: mechanisms, clinical implications, and therapeutic horizons."
+    },
+    {
+      "pmid": "",
+      "doi": "10.1186/s12944-026-03056-4",
+      "title": "Composite metabolic indices are associated with severity of proliferative diabetic retinopathy in type 2 diabetes: a three-centre cross-sectional study"
+    },
+    {
+      "pmid": "42703549",
+      "doi": "10.2147/dmso.s595209",
+      "title": "6-Gingerol Regulates the Exosomal miR-148b-3p/ACSL4/Ferroptosis Axis in an in vitro Model of Diabetic Retinopathy."
+    },
+    {
+      "pmid": "42656923",
+      "doi": "10.1002/ccs3.70108",
+      "title": "FOXO6 inhibits SMURF2‐mediated ubiquitination and degradation of NR4A1 to promote retinal pigment epithelial cell ferroptosis in diabetic retinopathy"
+    },
+    {
+      "pmid": "42461929",
+      "doi": "10.2337/db26-0053",
+      "title": "Long-Acting RXR Agonism Preserves Retinal Function and Modulates Inflammation in Diabetic Retinopathy."
+    },
+    {
+      "pmid": "42526719",
+      "doi": "10.1016/j.survophthal.2026.07.013",
+      "title": "The hard exudate pathway: Biological mechanisms, imaging correlates, and clinical implications."
+    },
+    {
+      "pmid": "42714715",
+      "doi": "10.1007/s11033-026-12608-x",
+      "title": "Acteoside alleviates high glucose-induced ROS accumulation and ferroptosis in ARPE-19 cells by activating the NRF2 signaling pathway."
+    },
+    {
+      "pmid": "42668075",
+      "doi": "10.1016/j.phrs.2026.108415",
+      "title": "Decoding the bile acid–mitochondria axis: Implications for disease management and therapeutic opportunities"
+    },
+    {
+      "pmid": "",
+      "doi": "10.3390/biom16091314",
+      "title": "Proteomic Analysis of Retinas from Two Different Type-1 Diabetic Models"
+    },
+    {
+      "pmid": "42603577",
+      "doi": "10.1016/j.phrs.2026.108388",
+      "title": "Vascular complications: Mechanisms and therapeutic perspectives."
+    },
+    {
+      "pmid": "42615799",
+      "doi": "10.1167/iovs.67.10.48",
+      "title": "Triglyceride-Glucose-Related Indexes as Risk Factors for Vision-Threatening Ocular Diseases: A Prospective UK Biobank Study."
+    },
+    {
+      "pmid": "",
+      "doi": "10.3389/fendo.2026.1914361",
+      "title": "COVID-19 and subsequent risk of coded diabetic retinopathy in patients with type 2 diabetes: a multicenter propensity score-matched cohort study"
+    },
+    {
+      "pmid": "42276504",
+      "doi": "10.1016/j.exer.2026.111121",
+      "title": "To delineate the role of Zinc Alpha 2 Glycoprotein in the pathophysiology of diabetic retinopathy using in vitro models of retinal endothelial cells and pericytes"
+    },
+    {
+      "pmid": "41875416",
+      "doi": "10.1097/iae.0000000000004843",
+      "title": "EFFICACY OF COMBINED DEXAMETHASONE IMPLANT AND NAVIGATED SUBTHRESHOLD MICROPULSE YELLOW LASER IN DIABETIC MACULAR EDEMA"
+    },
+    {
+      "pmid": "",
+      "doi": "10.3389/fendo.2026.1899237",
+      "title": "Hormonal metabolic burden in diabetic retinopathy: the diabetic retina as an endocrine-responsive target organ"
+    },
+    {
+      "pmid": "42644680",
+      "doi": "10.1167/tvst.15.8.26",
+      "title": "Machine Learning and Metabolomics to Characterize Warburg-Like Metabolic Subtypes in Human Retinal Endothelial Cells Exposed to Risk Factors Associated With Proliferative Diabetic Retinopathy"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1111/coin.70288",
+      "title": "Deep Learning‐Based Classification of Diabetic Retinopathy and Macular Edema Diseases"
+    },
+    {
+      "pmid": "42626053",
+      "doi": "10.5662/wjm.115265",
+      "title": "Artificial intelligence in ophthalmology: From diagnostic accuracy to clinical application."
+    },
+    {
+      "pmid": "42722111",
+      "doi": "10.1016/j.ophtha.2026.09.005",
+      "title": "Association of Common Anti-Inflammatory Medications with Reduced Risk of Vision-Threatening Diabetic Retinopathy in Type 2 Diabetes."
+    },
+    {
+      "pmid": "42720704",
+      "doi": "10.1007/s10792-026-04272-8",
+      "title": "Alpinia Oxyphylla-Shenqi Siwu Decoction protects against high glucose-induced retinal pigment epithelial cell injury involving the PI3K/AKT/mTOR pathway."
+    },
+    {
+      "pmid": "42720123",
+      "doi": "10.1080/02713683.2026.2726019",
+      "title": "Redistribution of Aquaporin Proteins in Retinal Blood Vessels in Human Diabetic Retinopathy."
+    },
+    {
+      "pmid": "",
+      "doi": "10.3389/fimmu.2026.1892763",
+      "title": "Photoreceptor outer segments promote the accumulation of lipid droplets in microglia by reprogramming lipid metabolism"
+    },
+    {
+      "pmid": "",
+      "doi": "10.3390/biology15181581",
+      "title": "Compartment-Specific Immune, Endothelial, and Fibrotic Programs in Diabetic Retinopathy: An Integrative Multi-Cohort Transcriptomic Study"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1038/s41598-026-70676-2",
+      "title": "Performance of AI-based diabetic retinopathy screening is highly dependent on evaluation setting: a five-year, multi-framework study"
+    },
+    {
+      "pmid": "42709274",
+      "doi": "10.1007/s10792-026-04269-3",
+      "title": "Pre- and post-COVID-19 changes in retinal disease patterns in Türkiye: insights from a tertiary hospital."
+    },
+    {
+      "pmid": "42706515",
+      "doi": "10.1186/s12886-026-05298-3",
+      "title": "Association between macular edema area on optical coherence tomography and Amsler grid sensitivity in diabetic macular edema: a cross-sectional study."
+    },
+    {
+      "pmid": "42639255",
+      "doi": "10.18240/ijo.2026.09.05",
+      "title": "Desferrioxamine attenuating high glucose-induced ferroptosis and inflammatory responses in Müller glial cells &lt;i&gt;via&lt;/i&gt; Nrf2/TXNRD1 pathway."
+    },
+    {
+      "pmid": "42737712",
+      "doi": "10.3390/ijms27177815",
+      "title": "Regulation of Glutathione Peroxidase 4 in Diabetic Retinopathy.",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "",
+      "doi": "10.22541/authorea.15008718/v1",
+      "title": "Finerenone Alleviates Metabolic Dysfunction-Associated Steatohepatitis by Dual-Targeting MR and ACSL4 to Reshape Lipid Homeostasis and Suppress Ferroptosis",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1186/s40942-026-00937-9",
+      "title": "Macular superficial capillary plexus perfusion density after panretinal photocoagulation in diabetic retinopathy: an OCT angiography study",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "",
+      "doi": "10.3390/microorganisms14092008",
+      "title": "Lactococcus G423 Improves Lipid Metabolism in Broilers Through the Gut Microbiota and AMPK Signaling Pathway",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "42733154",
+      "doi": "10.1111/dom.71338",
+      "title": "Longitudinal Metabolic Risk Factors Are Associated With Microvascular Complications.",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "",
+      "doi": "10.18240/ijo.2026.10.05",
+      "title": "Angiogenesis-RNA modification in diabetic retinopathy: biomarkers and targets",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "42485567",
+      "doi": "10.2337/db26-0179",
+      "title": "Deletion of 12/15-Lipoxygenase Preserves Retinal Thickness and Function and Selectively Restores Dysregulated miRNAs in Experimental Diabetes Mice.",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "42733307",
+      "doi": "10.1002/advs.77711",
+      "title": "Microglial TSPAN4-Dependent Migrasomes Promote Pathological Retinal Neovascularization via Immune-Vascular Crosstalk.",
+      "first_seen": "2026-09-16"
+    },
+    {
+      "pmid": "42729512",
+      "doi": "10.3389/fmed.2026.1904880",
+      "title": "Endocrinology concepts for diabetic retinopathy care: bridging systemic metabolic control with retinal disease management and patient education.",
+      "first_seen": "2026-09-16"
+    }
   ]
 }
