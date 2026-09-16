@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: dr-lipid-weekly-brief
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   weekly-brief:
