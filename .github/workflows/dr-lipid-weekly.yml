@@ -45,8 +45,11 @@ jobs:
           WEEKLY_HARD_MAX: '60'
           WEEKLY_OUTPUT_DIR: Output/weekly
           WEEKLY_HISTORY_PATH: data/weekly_history.json
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TRANSLATION_OPENAI_MODEL: 'gpt-5'
+          TRANSLATION_DEBUG: '1'
         run: python code/weekly_brief.py
-      - name: Validate report encoding and history deduplication
+      - name: Validate report encoding and translation quality and history deduplication
         run: |
           python - <<'PY'
           import json, pathlib, re
@@ -54,9 +57,13 @@ jobs:
           d=sorted(out.glob('*.json'))[-1]
           payload=json.loads(d.read_text(encoding='utf-8'))
           html=sorted(out.glob('*.html'))[-1].read_text(encoding='utf-8')
-          bad=sum(1 for x in payload.get('papers',[]) if '�' in (x.get('annotation',{}).get('abstract_zh','') or '') or 'Ã' in (x.get('annotation',{}).get('abstract_zh','') or ''))
+          bad=[]
+          for x in payload.get('papers',[]):
+            z=x.get('annotation',{}).get('abstract_zh','') or ''
+            if any(t in z for t in ('�','Ã','Â','â€','ðŸ','æµ','ç”','ï¿½')) or '【自动翻译服务暂不可用' in z:
+              bad.append(x.get('title','unknown'))
           if bad:
-            raise SystemExit(f'Encoding validation failed: {bad} translated abstracts contain mojibake markers.')
+            raise SystemExit(f'Translation validation failed for {len(bad)} abstracts: {bad[:3]}')
           if not html.startswith('<!doctype html>') or 'charset=UTF-8' not in html:
             raise SystemExit('HTML UTF-8 header validation failed.')
           hist=json.loads(pathlib.Path('data/weekly_history.json').read_text(encoding='utf-8'))
@@ -71,7 +78,7 @@ jobs:
             if r.get('title'): keys.append('title:'+re.sub(r'[^a-z0-9]+','',str(r['title']).lower()))
             if any(k in hist_keys for k in keys):
               raise SystemExit('History validation failed: newly selected paper already exists in history.')
-          print('Encoding and history validation passed.')
+          print('Translation, UTF-8, and history validation passed.')
           PY
       - name: Send weekly brief to QQ mailbox
         env:
