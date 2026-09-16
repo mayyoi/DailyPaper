@@ -1,4 +1,4 @@
-"""Final weekly runner: persistent history, focused retrieval, Bing-first metrics, fast translation."""
+"""Final weekly runner: persistent history, focused retrieval, Bing-first metrics, multi-route translation."""
 from __future__ import annotations
 import argparse,os,json
 from pathlib import Path
@@ -10,7 +10,7 @@ from daily_pipeline import enrich_direction_tags
 from relevance_ranker import rank_records
 from journal_metrics import annotate_journal_metrics
 from metadata_enrichment import enrich_selected_records
-from translation_service_v3 import zh as robust_zh
+from translation_service_v4 import zh as robust_zh
 from web_metrics_fill_v3 import fill_missing
 from weekly_brief_v4 import _load_history,_filter_history,_render_md,_render_html
 
