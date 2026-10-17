@@ -611,6 +611,60 @@
       "doi": "10.1186/s40104-026-01494-9",
       "title": "Magnolol enhances yak oocyte maturation and blastocyst quality by improving lipid metabolism and redox homeostasis through a PPARγ-dependent mechanism",
       "first_seen": "2026-10-12"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1172/jci205800",
+      "title": "ISG15+ Müller glial subtype contributes to early blood–retinal barrier breakdown in diabetic retinopathy",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "42854922",
+      "doi": "10.1016/j.taap.2026.118077",
+      "title": "ATF3 inhibits retinal pigment epithelial cell injury by activating HSPA5:A mechanistic insight for diabetic retinopathy.",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.5281/zenodo.23382524",
+      "title": "Dataset for: Serum Homocysteine Levels and Retinal Nerve Fibre Layer Thickness in Type 2 Diabetic Retinopathy: A Retrospective Study",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1096/fj.202602574r",
+      "title": "<scp>FAM3A</scp> Inhibits Plasma Triglyceride Levels via Microvasculature‐Involved Enhancement of <scp>VLDL</scp> ‐Triglyceride Hydrolysis and Lipid Uptake",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1038/s41598-026-72188-5",
+      "title": "Systematic validation of zucker diabetic-sprague dawley male rats as a model for type 2 diabetes-associated diabetic retinopathy",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1038/s41420-026-03378-3",
+      "title": "Knockdown of lipocalin 2 alleviates ocular angiogenesis in diabetic retinopathy by lowering endothelial cell energy metabolism",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.3389/fimmu.2026.1902920",
+      "title": "Macrophage lipid metabolism and inflammasome activation in rheumatoid arthritis: emerging mechanisms and therapeutic implications",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.21203/rs.3.rs-11133463/v1",
+      "title": "Association between VEGF gene polymorphisms and the therapeutic response to bevacizumab in Diabetic Macular Edema",
+      "first_seen": "2026-10-17"
+    },
+    {
+      "pmid": "",
+      "doi": "10.1186/s43556-026-00618-x",
+      "title": "Docosahexaenoic acid remodels lipid composition of lipid rafts and mitochondrial function in ApoE4/4 mouse brain: a multi-omic investigation",
+      "first_seen": "2026-10-17"
     }
   ]
 }
