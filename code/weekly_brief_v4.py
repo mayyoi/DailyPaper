@@ -132,3 +132,14 @@ def run_weekly_brief(days=21,per_query=80,minimum_score=55,hard_max=60,output_di
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(); p.add_argument('--days',type=int,default=int(os.getenv('WEEKLY_DAYS','21'))); p.add_argument('--per-query',type=int,default=int(os.getenv('WEEKLY_PER_QUERY','80'))); p.add_argument('--minimum-score',type=int,default=int(os.getenv('WEEKLY_MINIMUM_SCORE','55'))); p.add_argument('--hard-max',type=int,default=int(os.getenv('WEEKLY_HARD_MAX','60'))); p.add_argument('--output-dir',default=os.getenv('WEEKLY_OUTPUT_DIR','Output/weekly')); p.add_argument('--history-path',default=os.getenv('WEEKLY_HISTORY_PATH','data/weekly_history.json')); a=p.parse_args(); run_weekly_brief(a.days,a.per_query,a.minimum_score,a.hard_max,a.output_dir,a.history_path)
+
+
+
+# ---------------------------------------------------------
+# 邮件版式升级：优先使用 email_ui.py 里的新模板
+# 如果该文件还没上传，会自动退回原来的简单版式，不会报错。
+# ---------------------------------------------------------
+try:
+    from email_ui import render_html as _render_html  # noqa: F811
+except Exception:  # noqa: BLE001
+    pass
