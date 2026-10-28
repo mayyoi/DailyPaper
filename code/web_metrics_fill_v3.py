@@ -1,6 +1,7 @@
 """Fast journal metric fallback: Bing first; Google only if Bing fails."""
 from __future__ import annotations
-import html,re,xml.etree.ElementTree as ET
+import html,re,xml.etree.ElementTree as ET,time,json
+from pathlib import Path
 from urllib.parse import quote_plus
 import requests
 import web_metrics_fill as base
@@ -24,15 +25,36 @@ def search_bing(journal,issn):
  if not best:return {}
  _,item,jif,q=best
  return {'journal':journal,'issn':issn,'jif':jif,'jif_year':2025 if jif is not None else None,'jcr_release':2026 if q else None,'jcr_quartile':q,'jcr_category_rank':'','metric_source':'Bing web search via text proxy (third-party evidence; not independently verified as Clarivate JCR)','metric_url':item.get('url',''),'metric_search_query':qs[0],'metric_evidence':clean(item.get('title','')+' | '+item.get('snippet',''))}
+CACHE=Path('data/journal_metric_cache.json')
+_last=0.0
+def throttle():
+ global _last
+ delay=2-(time.monotonic()-_last)
+ if delay>0:time.sleep(delay)
+ _last=time.monotonic()
 def fill_missing(records):
  records=list(records)
+ try:cache=json.loads(CACHE.read_text(encoding='utf-8'))
+ except (OSError,ValueError):cache={}
+ changed=False
  for r in records:
   m=r.get('journal_metrics') or {}
   if m.get('jif') is not None and m.get('jcr_quartile') and m.get('jcr_quartile')!='未检索到':continue
-  found=search_bing(r.get('journal',''),r.get('issn',''))
-  if not found:
-   try:found=base._search(r.get('journal',''),r.get('issn',''))
-   except Exception as e:print(f'[google-fallback] {e}');found={}
+  journal=r.get('journal','');issn=r.get('issn','')
+  key=(str(journal).strip().casefold()+'|'+str(issn).strip().casefold())
+  entry=cache.get(key,{})
+  ttl=(30 if entry.get('value') else 7)*86400
+  if entry and time.time()-entry.get('time',0)<ttl:found=entry.get('value',{})
+  else:
+   throttle();found=search_bing(journal,issn)
+   if not found and not getattr(fill_missing,'google_disabled',False):
+    try:
+     throttle();found=base._search(journal,issn)
+    except Exception as e:
+     print(f'[google-fallback] {e}')
+     if '429' in str(e):fill_missing.google_disabled=True
+     found={}
+   cache[key]={'time':time.time(),'value':found};changed=True
   if not found:continue
   merged=dict(m)
   for k,v in found.items():
@@ -41,4 +63,7 @@ def fill_missing(records):
    if k=='jcr_quartile' and m.get('jcr_quartile') and m.get('jcr_quartile')!='未检索到':continue
    merged[k]=v
   r['journal_metrics']=merged
+ if changed:
+  CACHE.parent.mkdir(parents=True,exist_ok=True)
+  CACHE.write_text(json.dumps(cache,ensure_ascii=False,indent=2),encoding='utf-8')
  return records
