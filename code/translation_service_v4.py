@@ -3,6 +3,7 @@ import html
 import re
 import os
 import requests
+import time
 from urllib.parse import quote_plus
 
 GLOSSARY={"diabetic retinopathy":"糖尿病视网膜病变","diabetic macular edema":"糖尿病黄斑水肿","lipid metabolism":"脂质代谢","lipid homeostasis":"脂质稳态","lipotoxicity":"脂毒性","fatty acid":"脂肪酸","phospholipid":"磷脂","sphingolipid":"鞘脂","ceramide":"神经酰胺","cholesterol":"胆固醇","triglyceride":"甘油三酯","lipoprotein":"脂蛋白","lipid droplet":"脂滴","lipid peroxidation":"脂质过氧化","ferroptosis":"铁死亡","endothelial cell":"内皮细胞","endothelial cells":"内皮细胞","müller cell":"Müller细胞","muller cell":"Müller细胞","retinal pigment epithelium":"视网膜色素上皮","blood-retinal barrier":"血视网膜屏障","mitochondrial":"线粒体","inflammation":"炎症","oxidative stress":"氧化应激","neovascularization":"新生血管形成","permeability":"通透性","apoptosis":"细胞凋亡","macrophage":"巨噬细胞","fatty acid oxidation":"脂肪酸氧化","intravitreal":"玻璃体腔内","sustained release":"持续释药","long-acting":"长效","retinal vascular endothelial cell":"视网膜血管内皮细胞"}
@@ -67,9 +68,14 @@ def translate(text):
     providers=['openai','google'] if os.getenv('OPENAI_API_KEY','').strip() else ['google'];out=[]
     for c in chunks(text):
         val=''
-        for p in providers:
-            _,val=openai_translate(c) if p=='openai' else google_translate(c)
+        for attempt in range(3):
+            for p in providers:
+                _,val=openai_translate(c) if p=='openai' else google_translate(c)
+                if val:break
             if val:break
+            if attempt<2:
+                print(f'[translation] retry {attempt+1}/2')
+                time.sleep(2**attempt)
         if not val:return ''
         out.append(val)
     x=apply_glossary(clean(' '.join(out)));return x if quality(text,x) else ''
