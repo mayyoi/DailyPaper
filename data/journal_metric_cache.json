@@ -1,6 +1,6 @@
 {
   "|": {
-    "time": 1793591084.0945427,
+    "time": 1794196602.0072231,
     "value": {}
   },
   "frontiers in cell and developmental biology|": {
@@ -24,11 +24,63 @@
     "value": {}
   },
   "retina|": {
-    "time": 1793591111.2255003,
+    "time": 1794196620.4925563,
     "value": {}
   },
   "frontiers in aging neuroscience|": {
     "time": 1793591115.7351236,
     "value": {}
+  },
+  "frontiers in cell death|": {
+    "time": 1794196573.9972353,
+    "value": {}
+  },
+  "plos one|": {
+    "time": 1794196577.908529,
+    "value": {}
+  },
+  "frontiers in clinical diabetes and healthcare|": {
+    "time": 1794196583.171003,
+    "value": {}
+  },
+  "biomedicines|": {
+    "time": 1794196587.4325545,
+    "value": {}
+  },
+  "circulation|": {
+    "time": 1794196592.2571275,
+    "value": {}
+  },
+  "experimental eye research|": {
+    "time": 1794196596.9279542,
+    "value": {}
+  },
+  "biorxiv (cold spring harbor laboratory)|": {
+    "time": 1794196606.6721299,
+    "value": {}
+  },
+  "preprints.org|": {
+    "time": 1794196610.8766792,
+    "value": {}
+  },
+  "research square|": {
+    "time": 1794196615.660248,
+    "value": {}
+  },
+  "scientific reports|": {
+    "time": 1794196624.0485718,
+    "value": {
+      "journal": "Scientific Reports",
+      "issn": "",
+      "jif": 4.38,
+      "jif_year": 2025,
+      "jcr_release": null,
+      "jcr_quartile": "",
+      "jcr_category_rank": "",
+      "metric_source": "Bing web search (third-party evidence; not independently verified as Clarivate JCR)",
+      "metric_url": "https://www.iikx.com/sci/comprehensives/18231.html",
+      "metric_search_query": "\"Scientific Reports\"影响因子",
+      "metric_evidence": "Scientific Reports _ 影响因子 (IF)_中科院分区_SCI期刊投稿 ... | 3 天之前 · Scientific Reports has a 2-year impact factor : 4.380 (2021), and is the 6th most-cited journal in the world, with more than …"
+    }
   }
 }
